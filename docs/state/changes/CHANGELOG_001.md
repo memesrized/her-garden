@@ -1,0 +1,14 @@
+# Changes
+
+## 2026-09-06
+
+- Change: Implement the single-household Plant Memory MCP MVP.
+- What: Nine typed tools, PostgreSQL event/projection transactions, retry-safe writes,
+  corrections, fuzzy inventory, OAuth household consent, Docker Compose and deployment workflows.
+- Reasoning: Keep facts durable and retrieval compact without adding plant-care intelligence
+  or asynchronous infrastructure. See the architecture decisions for alternatives.
+- Validation: Integration tests exercise real PostgreSQL and SDK OAuth/HTTP routes; the notebook
+  records a retry, backdated action, correction and approximate inventory using public fixtures.
+- Next steps: Complete the first user login in ChatGPT; improve only from actual household use.
+- Files: `src/her_garden/`, `tests/`, `compose.yaml`, `Dockerfile`, `.github/workflows/`,
+  `scripts/`, `deploy/`, `notebooks/demos/plant_memory.ipynb`, `docs/state/`.

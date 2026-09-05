@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up the Her Garden PostgreSQL database
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=codex
+WorkingDirectory=/home/codex/apps/her-garden
+ExecStart=/bin/sh scripts/backup.sh
+UMask=0077
