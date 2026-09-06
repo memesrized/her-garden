@@ -10,6 +10,9 @@
   deployments reproduce the selected mode instead of relying on undocumented server state.
 - Limitation: The public IP receives automated scans, so anonymous mode is intended only for a
   short test window.
+- Verification: External anonymous initialization returns HTTP 200 using MCP protocol
+  `2025-11-25`, and Claude connects successfully. ChatGPT still fails to connect, establishing
+  that its current failure is independent of OAuth.
 
 ## 2026-09-06 — OAuth discovery compatibility
 

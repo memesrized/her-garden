@@ -1,8 +1,10 @@
 # Known limits and next steps
 
 - One shared household password and scope; no separate users, roles or tenant isolation.
-- First connection from the user's actual ChatGPT account remains a human verification step.
-  SDK integration tests verify OAuth and tools, not ChatGPT account eligibility or UI behavior.
+- The deployed Streamable HTTP endpoint initializes anonymously and works in Claude, but ChatGPT
+  does not connect even with OAuth disabled. This isolates the remaining failure to ChatGPT's
+  connector validation or its handling of the raw-IP HTTPS endpoint rather than MCP transport or
+  the OAuth implementation. Avoid further client-specific server workarounds without new evidence.
 - No actual plant data was supplied. The executed public demo uses explicit fictional examples
   from the spec; production starts empty.
 - Search is case-insensitive substring matching, not typo-tolerant or semantic search.
