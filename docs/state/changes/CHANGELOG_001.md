@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-09-06 — Return to direct anonymous access
+
+- Deployment: Set the remote private `AUTH_ENABLED` value and GitHub production variable to
+  `false`. External MCP initialize now returns HTTP 200 without credentials, using protocol
+  `2025-11-25`; OAuth discovery is inactive.
+- Tunnel: Keep the verified OpenAI tunnel-client installation, profile and private credential,
+  but stop and disable its systemd service after the ChatGPT tunnel attempt failed.
+- Reasoning: The owner chose the working, directly reachable Claude-compatible endpoint while
+  retaining both OAuth and tunnel configurations for a later revisit.
+
 ## 2026-09-06 — ChatGPT literal-IP diagnosis
 
 - Finding: A connector attempt using a fresh query-suffixed URL produced no request at nginx,

@@ -28,6 +28,10 @@ and client registration do not expose plant data. Access tokens expire after one
 refresh tokens rotate and expire after 30 days. Each refresh invalidates the previous pair.
 The consent form has CSRF protection and a ten-attempt-per-minute household login limit.
 
+The current deployment intentionally sets `AUTH_ENABLED=false`, so the internet-facing MCP
+endpoint accepts anonymous requests. The repository default remains secure (`true`), while the
+GitHub `production` environment variable records the deliberate deployment override.
+
 Changing the household password does not revoke existing OAuth grants. To revoke access,
 use the OAuth revocation endpoint with the registered client credentials, or perform an
 explicitly authorized deletion of the relevant `oauth_records` token records. Do not erase
@@ -78,6 +82,15 @@ image and auth-mode selection is saved in private `.env`. Compose/nginx/host-scr
 maintained separately from ordinary application-image releases.
 
 PRs are merged manually after required CI passes; neither workflow merges PRs automatically.
+
+## Secure MCP Tunnel
+
+OpenAI `tunnel-client` 0.0.14 is installed under `/opt/openai/tunnel-client/` with profile
+`her-garden`. The root-managed runtime credential is outside the repository in
+`/etc/her-garden/tunnel.env`. The `her-garden-tunnel.service` unit and configuration are retained,
+but the service is disabled and inactive because the ChatGPT tunnel experiment did not work and
+the owner selected direct anonymous HTTPS access. Do not start the tunnel unless that decision is
+revisited; never print or commit its runtime credential.
 
 ### Discovery compatibility
 

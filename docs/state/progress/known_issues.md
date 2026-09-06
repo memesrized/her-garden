@@ -3,9 +3,9 @@
 - One shared household password and scope; no separate users, roles or tenant isolation.
 - The deployed Streamable HTTP endpoint initializes anonymously and works in Claude. It has a
   publicly trusted Let's Encrypt certificate for the exact IP, and tool descriptors advertise
-  OpenAI's documented `noauth` security scheme. A fresh ChatGPT connector attempt generated no
-  HTTP request at nginx. OpenAI's MCP requirements call for a publicly accessible domain, so the
-  next compatibility test requires a real hostname or OpenAI Secure MCP Tunnel.
+  OpenAI's documented `noauth` security scheme. ChatGPT did not connect through either the raw-IP
+  URL or a healthy OpenAI Secure MCP Tunnel. The owner selected direct anonymous HTTPS access for
+  now; the tunnel service remains installed but stopped.
 - No actual plant data was supplied. The executed public demo uses explicit fictional examples
   from the spec; production starts empty.
 - Search is case-insensitive substring matching, not typo-tolerant or semantic search.
