@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-06 — OAuth discovery compatibility
+
+- Change: Add proxy aliases for origin and issuer-relative OAuth discovery.
+- Reasoning: ChatGPT reported missing S256 even though canonical metadata advertised it;
+  alternate discovery URLs returned 404. All aliases serve the same canonical metadata.
+- Files: `deploy/nginx-location.conf`, `docs/state/system/operations.md`.
+
 ## 2026-09-06
 
 - Change: Implement the single-household Plant Memory MCP MVP.

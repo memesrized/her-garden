@@ -75,3 +75,12 @@ image selection is saved in private `.env`. Compose/nginx/host-script changes ar
 separately from ordinary application-image releases.
 
 PRs are merged manually after required CI passes; neither workflow merges PRs automatically.
+
+### Discovery compatibility
+
+Nginx also serves authorization metadata at the origin well-known URL and at
+`/garden/.well-known/oauth-authorization-server`, forwarding both to the canonical
+RFC 8414 path `/.well-known/oauth-authorization-server/garden`. All return the same
+issuer and `code_challenge_methods_supported: ["S256"]`. Origin-level protected-resource
+discovery similarly forwards to the garden MCP metadata. These aliases avoid 404s when
+clients probe a different discovery convention; they do not change authentication or PKCE.
