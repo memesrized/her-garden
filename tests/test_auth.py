@@ -60,9 +60,7 @@ async def test_mcp_without_auth(store: GardenStore) -> None:
             )
             tools = listed.json()["result"]["tools"]
             assert len(tools) == 9
-            assert all(
-                tool["_meta"]["securitySchemes"] == [{"type": "noauth"}] for tool in tools
-            )
+            assert all(tool["_meta"]["securitySchemes"] == [{"type": "noauth"}] for tool in tools)
             assert (
                 await client.get("/.well-known/oauth-authorization-server/garden")
             ).status_code == 404

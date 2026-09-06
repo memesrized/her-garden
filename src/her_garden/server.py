@@ -118,9 +118,7 @@ def register_tools(mcp: FastMCP, store: GardenStore, *, auth_enabled: bool) -> N
     )
     security: dict[str, Any] = {
         "securitySchemes": (
-            [{"type": "oauth2", "scopes": [SCOPE]}]
-            if auth_enabled
-            else [{"type": "noauth"}]
+            [{"type": "oauth2", "scopes": [SCOPE]}] if auth_enabled else [{"type": "noauth"}]
         )
     }
 
