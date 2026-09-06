@@ -1,5 +1,17 @@
 # Changes
 
+## 2026-09-06 — ChatGPT literal-IP diagnosis
+
+- Finding: A connector attempt using a fresh query-suffixed URL produced no request at nginx,
+  even with an unfiltered method/header-only diagnostic log. ChatGPT rejected the connection
+  before HTTP reached the service.
+- Verification: The raw-IP endpoint remains externally reachable, its Let's Encrypt certificate
+  validates for the exact IP, and MCP initialize plus tool listing succeed. Temporary diagnostic
+  configuration and logs were removed immediately after capture.
+- Conclusion: OpenAI's published MCP requirements specify a publicly accessible domain. A real
+  hostname or OpenAI Secure MCP Tunnel is required for the next ChatGPT test; further MCP protocol
+  changes cannot affect a request that never reaches the server.
+
 ## 2026-09-06 — ChatGPT no-auth tool descriptors
 
 - Change: Advertise `_meta.securitySchemes: [{"type": "noauth"}]` on every tool while

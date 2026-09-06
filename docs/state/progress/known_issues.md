@@ -1,10 +1,11 @@
 # Known limits and next steps
 
 - One shared household password and scope; no separate users, roles or tenant isolation.
-- The deployed Streamable HTTP endpoint initializes anonymously and works in Claude. A ChatGPT
-  connector attempt reached `POST /garden/mcp` twice and received HTTP 200 with the expected
-  Streamable HTTP headers and MCP `2025-11-25`; it did not make a preliminary GET. Tool descriptors
-  now explicitly advertise OpenAI's documented `noauth` security scheme, pending a ChatGPT retry.
+- The deployed Streamable HTTP endpoint initializes anonymously and works in Claude. It has a
+  publicly trusted Let's Encrypt certificate for the exact IP, and tool descriptors advertise
+  OpenAI's documented `noauth` security scheme. A fresh ChatGPT connector attempt generated no
+  HTTP request at nginx. OpenAI's MCP requirements call for a publicly accessible domain, so the
+  next compatibility test requires a real hostname or OpenAI Secure MCP Tunnel.
 - No actual plant data was supplied. The executed public demo uses explicit fictional examples
   from the spec; production starts empty.
 - Search is case-insensitive substring matching, not typo-tolerant or semantic search.
