@@ -1,0 +1,50 @@
+name: her-garden
+services:
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: garden
+      POSTGRES_USER: garden
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in private .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U garden -d garden"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+  app:
+    image: ${GARDEN_IMAGE:-her-garden:local}
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://garden:${POSTGRES_PASSWORD}@db:5432/garden
+      PUBLIC_URL: ${PUBLIC_URL:?Set PUBLIC_URL}
+      HOUSEHOLD_PASSWORD_HASH: ${HOUSEHOLD_PASSWORD_HASH:?Set HOUSEHOLD_PASSWORD_HASH}
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
+    ports:
+      - "127.0.0.1:8002:8002"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/garden/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  postgres_data:

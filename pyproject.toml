@@ -1,0 +1,51 @@
+[project]
+name = "her-garden"
+version = "0.1.0"
+description = "Authenticated MCP memory for household plants and supplies"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "mcp[cli]>=1.26,<2",
+    "psycopg[binary,pool]>=3.2,<4",
+    "pydantic-settings>=2,<3",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.3.0",
+    "mypy>=2.3.1",
+    "nbclient>=0.11.0",
+    "nbformat>=5.11.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+her-garden = "her_garden.server:main"
+
+[tool.ruff]
+target-version = "py314"
+extend-exclude = [".agents"]
+
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+files = ["src", "tests"]
+strict = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+"scripts/build_demo.py" = ["E501"]
