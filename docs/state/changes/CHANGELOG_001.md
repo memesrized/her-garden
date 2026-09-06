@@ -1,16 +1,5 @@
 # Changes
 
-## 2026-09-06 — Local MCP client OAuth testing
-
-- Change: Permit dynamic OAuth clients to register an exact `/callback` URL on the
-  `127.0.0.1` or IPv6 loopback address, with any ephemeral port. Treat an omitted OAuth
-  scope as the server's sole `garden` scope.
-- Reasoning: Codex uses a loopback OAuth callback for remote MCP login. Keeping the host and
-  path allowlist narrow and defaulting the only available scope enables direct integration
-  testing without weakening household consent.
-- Deliberately unchanged: Existing ChatGPT callbacks, PKCE, password consent, token storage,
-  and the deployed public MCP URL remain unchanged.
-
 ## 2026-09-06 — OAuth discovery compatibility
 
 - Change: Add proxy aliases for origin and issuer-relative OAuth discovery.

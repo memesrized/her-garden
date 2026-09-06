@@ -49,10 +49,10 @@ class HouseholdAuth(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
         return OAuthClientInformationFull.model_validate(record) if record else None
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
-        """Accept ChatGPT and local-client callbacks; registration grants no access."""
+        """Accept ChatGPT callbacks only; registration never authorizes access."""
         for redirect in client_info.redirect_uris or []:
             url = urlsplit(str(redirect))
-            chatgpt_callback = (
+            if not (
                 url.scheme == "https"
                 and url.netloc == "chatgpt.com"
                 and (
@@ -61,19 +61,9 @@ class HouseholdAuth(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
                 )
                 and not url.fragment
                 and not url.query
-            )
-            loopback_callback = (
-                url.scheme == "http"
-                and url.hostname in {"127.0.0.1", "::1"}
-                and url.path == "/callback"
-                and not url.username
-                and not url.password
-                and not url.fragment
-                and not url.query
-            )
-            if not (chatgpt_callback or loopback_callback):
+            ):
                 raise RegistrationError(
-                    "invalid_redirect_uri", "Only ChatGPT or local loopback callbacks are allowed"
+                    "invalid_redirect_uri", "Only ChatGPT callbacks are allowed"
                 )
         if not client_info.redirect_uris or not client_info.client_id:
             raise RegistrationError("invalid_client_metadata", "Client and redirect URI required")
@@ -87,9 +77,7 @@ class HouseholdAuth(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
         """Save a short-lived request and redirect to the household consent form."""
         if params.resource and params.resource != self.resource:
             raise AuthorizeError("invalid_request", "Unknown resource")
-        if not params.scopes:
-            params = params.model_copy(update={"scopes": [SCOPE]})
-        elif params.scopes != [SCOPE]:
+        if params.scopes != [SCOPE]:
             raise AuthorizeError("invalid_scope", "The garden scope is required")
         if len(params.code_challenge) != 43:
             raise AuthorizeError("invalid_request", "S256 PKCE challenge required")
