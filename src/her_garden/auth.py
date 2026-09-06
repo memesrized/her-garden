@@ -87,7 +87,9 @@ class HouseholdAuth(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
         """Save a short-lived request and redirect to the household consent form."""
         if params.resource and params.resource != self.resource:
             raise AuthorizeError("invalid_request", "Unknown resource")
-        if params.scopes != [SCOPE]:
+        if not params.scopes:
+            params = params.model_copy(update={"scopes": [SCOPE]})
+        elif params.scopes != [SCOPE]:
             raise AuthorizeError("invalid_scope", "The garden scope is required")
         if len(params.code_challenge) != 43:
             raise AuthorizeError("invalid_request", "S256 PKCE challenge required")

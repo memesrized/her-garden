@@ -66,6 +66,20 @@ async def test_oauth_and_authenticated_mcp(store: GardenStore) -> None:
                 },
             )
             assert loopback.status_code == 201, loopback.text
+            loopback_client = loopback.json()
+            codex_authorize = await client.get(
+                "/garden/authorize",
+                params={
+                    "client_id": loopback_client["client_id"],
+                    "response_type": "code",
+                    "redirect_uri": "http://127.0.0.1:58128/callback",
+                    "code_challenge": "A" * 43,
+                    "code_challenge_method": "S256",
+                    "state": "codex-test-state",
+                },
+            )
+            assert codex_authorize.status_code in {302, 303, 307}
+            assert urlsplit(codex_authorize.headers["location"]).path == "/garden/login"
             registration = await client.post(
                 "/garden/register",
                 json={
