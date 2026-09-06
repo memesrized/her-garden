@@ -116,9 +116,13 @@ def register_tools(mcp: FastMCP, store: GardenStore, *, auth_enabled: bool) -> N
     write = ToolAnnotations(
         readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
     )
-    security: dict[str, Any] = (
-        {"securitySchemes": [{"type": "oauth2", "scopes": [SCOPE]}]} if auth_enabled else {}
-    )
+    security: dict[str, Any] = {
+        "securitySchemes": (
+            [{"type": "oauth2", "scopes": [SCOPE]}]
+            if auth_enabled
+            else [{"type": "noauth"}]
+        )
+    }
 
     @mcp.tool(annotations=read, meta=security)
     async def list_locations() -> list[Record]:

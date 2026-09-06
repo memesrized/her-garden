@@ -1,9 +1,20 @@
 # Changes
 
+## 2026-09-06 — ChatGPT no-auth tool descriptors
+
+- Change: Advertise `_meta.securitySchemes: [{"type": "noauth"}]` on every tool while
+  `AUTH_ENABLED=false`, matching the OpenAI tool descriptor format instead of returning empty
+  metadata. OAuth descriptors and the complete OAuth implementation remain unchanged.
+- Reasoning: Temporary request logging showed that ChatGPT reached `POST /garden/mcp` twice and
+  received HTTP 200 with MCP `2025-11-25`, so transport, GET probing and protocol negotiation were
+  ruled out. ChatGPT then stopped while Claude continued; tool discovery was the next boundary.
+- Verification: The no-auth integration test now initializes the server, lists all nine tools and
+  checks the documented no-auth security declaration on each descriptor.
+
 ## 2026-09-06 — Deployment authentication switch
 
 - Change: Add an `AUTH_ENABLED` setting that defaults to `true`; when false, the MCP transport
-  and tool metadata omit OAuth while the OAuth implementation and stored grants remain intact.
+  permits anonymous requests while the OAuth implementation and stored grants remain intact.
 - Deployment: Read the setting from the GitHub `production` environment and pass it through the
   constrained SSH deployment command as a validated boolean.
 - Reasoning: This permits a temporary anonymous ChatGPT connectivity test and ensures later CI/CD

@@ -49,6 +49,20 @@ async def test_mcp_without_auth(store: GardenStore) -> None:
                 },
             )
             assert initialized.status_code == 200, initialized.text
+            listed = await client.post(
+                "/garden/mcp",
+                headers={"Accept": "application/json, text/event-stream"},
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/list",
+                },
+            )
+            tools = listed.json()["result"]["tools"]
+            assert len(tools) == 9
+            assert all(
+                tool["_meta"]["securitySchemes"] == [{"type": "noauth"}] for tool in tools
+            )
             assert (
                 await client.get("/.well-known/oauth-authorization-server/garden")
             ).status_code == 404
