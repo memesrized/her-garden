@@ -1,4 +1,4 @@
-"""Authenticated HTTP MCP tools for plant memory, with no plant-care intelligence."""
+"""HTTP MCP tools for plant memory, with optional deployment authentication."""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -28,10 +28,23 @@ RequestId = Annotated[
 
 
 def create_app(settings: Settings) -> Starlette:
-    """Build an OAuth-protected MCP application and manage the database lifecycle."""
+    """Build the MCP application and manage its database lifecycle."""
     store = GardenStore(settings.database_url.get_secret_value())
     auth = HouseholdAuth(store, settings)
     origin = settings.public_url.removesuffix("/garden")
+    auth_settings = None
+    if settings.auth_enabled:
+        auth_settings = AuthSettings(
+            issuer_url=AnyHttpUrl(settings.public_url),
+            resource_server_url=AnyHttpUrl(auth.resource),
+            required_scopes=[SCOPE],
+            client_registration_options=ClientRegistrationOptions(
+                enabled=True,
+                valid_scopes=[SCOPE],
+                default_scopes=[SCOPE],
+            ),
+            revocation_options=RevocationOptions(enabled=True),
+        )
     mcp = FastMCP(
         "Her Garden",
         instructions=(
@@ -44,25 +57,15 @@ def create_app(settings: Settings) -> Starlette:
         stateless_http=True,
         json_response=True,
         streamable_http_path="/garden/mcp",
-        auth_server_provider=auth,
-        auth=AuthSettings(
-            issuer_url=AnyHttpUrl(settings.public_url),
-            resource_server_url=AnyHttpUrl(auth.resource),
-            required_scopes=[SCOPE],
-            client_registration_options=ClientRegistrationOptions(
-                enabled=True,
-                valid_scopes=[SCOPE],
-                default_scopes=[SCOPE],
-            ),
-            revocation_options=RevocationOptions(enabled=True),
-        ),
+        auth_server_provider=auth if settings.auth_enabled else None,
+        auth=auth_settings,
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
             allowed_hosts=[urlsplit(origin).netloc, "localhost:*", "127.0.0.1:*"],
             allowed_origins=[origin],
         ),
     )
-    register_tools(mcp, store)
+    register_tools(mcp, store, auth_enabled=settings.auth_enabled)
     app = mcp.streamable_http_app()
     # SDK auth handlers use fixed paths; prefix them to share an existing web server.
     for route in app.routes:
@@ -76,7 +79,8 @@ def create_app(settings: Settings) -> Starlette:
             from starlette.routing import compile_path
 
             route.path_regex, route.path_format, route.param_convertors = compile_path(route.path)
-    app.add_route("/garden/login", auth.handle_login, methods=["GET", "POST"])
+    if settings.auth_enabled:
+        app.add_route("/garden/login", auth.handle_login, methods=["GET", "POST"])
 
     async def handle_health(request: Request) -> JSONResponse:
         """Return readiness without exposing data or configuration."""
@@ -106,13 +110,15 @@ def create_app(settings: Settings) -> Starlette:
     return app
 
 
-def register_tools(mcp: FastMCP, store: GardenStore) -> None:
+def register_tools(mcp: FastMCP, store: GardenStore, *, auth_enabled: bool) -> None:
     """Expose focused, typed tools with accurate read/write annotations."""
     read = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False)
     write = ToolAnnotations(
         readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
     )
-    security: dict[str, Any] = {"securitySchemes": [{"type": "oauth2", "scopes": [SCOPE]}]}
+    security: dict[str, Any] = (
+        {"securitySchemes": [{"type": "oauth2", "scopes": [SCOPE]}]} if auth_enabled else {}
+    )
 
     @mcp.tool(annotations=read, meta=security)
     async def list_locations() -> list[Record]:

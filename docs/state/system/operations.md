@@ -21,8 +21,9 @@ This credential file, local `secrets/`, backups, SSH keys and environment files 
 enter Git or Docker build contexts. The Docker context is an allowlist of application files.
 Never log OAuth query strings, passwords, tokens, or database connection strings.
 
-Connect ChatGPT with OAuth and dynamic client registration. There is no signup or anonymous
-MCP access. The shared password is entered only on the server's consent page. Public metadata
+Connect ChatGPT with OAuth and dynamic client registration. There is no signup. Anonymous MCP
+access is disabled by default and can be enabled temporarily with `AUTH_ENABLED=false`. The
+shared password is entered only on the server's consent page. Public metadata
 and client registration do not expose plant data. Access tokens expire after one hour;
 refresh tokens rotate and expire after 30 days. Each refresh invalidates the previous pair.
 The consent form has CSRF protection and a ten-attempt-per-minute household login limit.
@@ -63,7 +64,9 @@ format checking and a Docker build on a GitHub-hosted runner. PR jobs get no pro
 After a successful push CI run on `master`, Deploy checks that the SHA is still current,
 builds a SHA-tagged image and streams it over SSH to `scripts/remote-deploy.sh`.
 
-The production environment contains `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, and `DEPLOY_KNOWN_HOSTS`.
+The production environment contains `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, and `DEPLOY_KNOWN_HOSTS`
+secrets plus the non-secret `AUTH_ENABLED` deployment variable. An absent auth variable defaults
+to `true`. The constrained deployment command accepts only a full image SHA and `true` or `false`.
 Use a dedicated SSH key with `restrict,command="/bin/bash /home/codex/apps/her-garden/scripts/remote-deploy.sh"`
 in `authorized_keys`. This allows only deployment of an image with a full commit SHA, without
 interactive shell, PTY or port forwarding. Host identity is pinned, not accepted blindly.
@@ -71,8 +74,8 @@ interactive shell, PTY or port forwarding. Host identity is pinned, not accepted
 The deployment script serializes runs with flock, loads the image, makes a backup, replaces
 only the app container and waits for readiness. On failed readiness it restores the preceding
 app image; it never deletes database volumes or automatically rewinds migrations. Successful
-image selection is saved in private `.env`. Compose/nginx/host-script changes are maintained
-separately from ordinary application-image releases.
+image and auth-mode selection is saved in private `.env`. Compose/nginx/host-script changes are
+maintained separately from ordinary application-image releases.
 
 PRs are merged manually after required CI passes; neither workflow merges PRs automatically.
 

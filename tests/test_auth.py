@@ -17,14 +17,41 @@ from her_garden.store import GardenStore
 PASSWORD = "integration-test-household-password"
 
 
-def settings(store: GardenStore) -> Settings:
+def settings(store: GardenStore, *, auth_enabled: bool = True) -> Settings:
     """Build test-only credentials and use the fixture's isolated schema."""
     salt = b"0" * 16
     digest = hashlib.scrypt(PASSWORD.encode(), salt=salt, n=16384, r=8, p=1).hex()
     return Settings(
         database_url=SecretStr(store.database_url),
         household_password_hash=SecretStr(f"{salt.hex()}:{digest}"),
+        auth_enabled=auth_enabled,
     )
+
+
+async def test_mcp_without_auth(store: GardenStore) -> None:
+    app = create_app(settings(store, auth_enabled=False))
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://localhost:8002"
+        ) as client:
+            initialized = await client.post(
+                "/garden/mcp",
+                headers={"Accept": "application/json, text/event-stream"},
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-11-25",
+                        "capabilities": {},
+                        "clientInfo": {"name": "no-auth-test", "version": "1"},
+                    },
+                },
+            )
+            assert initialized.status_code == 200, initialized.text
+            assert (
+                await client.get("/.well-known/oauth-authorization-server/garden")
+            ).status_code == 404
 
 
 async def test_oauth_and_authenticated_mcp(store: GardenStore) -> None:

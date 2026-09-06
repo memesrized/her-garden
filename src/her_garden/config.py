@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     database_url: SecretStr
     public_url: str = "http://localhost:8002/garden"
     household_password_hash: SecretStr
+    auth_enabled: bool = True
     port: int = 8002
 
     @field_validator("public_url")

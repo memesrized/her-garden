@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-09-06 — Deployment authentication switch
+
+- Change: Add an `AUTH_ENABLED` setting that defaults to `true`; when false, the MCP transport
+  and tool metadata omit OAuth while the OAuth implementation and stored grants remain intact.
+- Deployment: Read the setting from the GitHub `production` environment and pass it through the
+  constrained SSH deployment command as a validated boolean.
+- Reasoning: This permits a temporary anonymous ChatGPT connectivity test and ensures later CI/CD
+  deployments reproduce the selected mode instead of relying on undocumented server state.
+- Limitation: The public IP receives automated scans, so anonymous mode is intended only for a
+  short test window.
+
 ## 2026-09-06 — OAuth discovery compatibility
 
 - Change: Add proxy aliases for origin and issuer-relative OAuth discovery.

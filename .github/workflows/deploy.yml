@@ -44,10 +44,12 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          AUTH_ENABLED: ${{ vars.AUTH_ENABLED || 'true' }}
         run: |
           umask 077
           mkdir -p ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/garden_deploy
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           docker save "her-garden:$DEPLOY_SHA" | gzip | \
-            ssh -o BatchMode=yes -o IdentitiesOnly=yes -i ~/.ssh/garden_deploy "codex@$DEPLOY_HOST" "$DEPLOY_SHA"
+            ssh -o BatchMode=yes -o IdentitiesOnly=yes -i ~/.ssh/garden_deploy \
+              "codex@$DEPLOY_HOST" "$DEPLOY_SHA $AUTH_ENABLED"

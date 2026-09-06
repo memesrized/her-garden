@@ -24,6 +24,11 @@ Local development can use `http://localhost:8002/garden`.
 
 Enable developer mode where available on your ChatGPT account, then create a custom MCP
 app/connector with URL `https://YOUR_SERVER_IP/garden/mcp` and **OAuth** authentication.
+
+Authentication is enabled by default. Production deployments read `AUTH_ENABLED` from the
+GitHub `production` environment, defaulting to `true`. Setting it to `false` temporarily
+serves the MCP endpoint without OAuth while leaving the OAuth implementation and stored grants
+intact.
 Leave client ID/secret empty to use dynamic registration. Follow the login page and enter
 the household password to grant garden access. There is no public signup.
 ChatGPT account/workspace availability and write-tool permissions are controlled by ChatGPT.
