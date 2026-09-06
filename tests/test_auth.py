@@ -49,6 +49,23 @@ async def test_oauth_and_authenticated_mcp(store: GardenStore) -> None:
                 },
             )
             assert bad.status_code == 400
+            unsafe_loopback = await client.post(
+                "/garden/register",
+                json={
+                    "redirect_uris": ["http://localhost:58128/callback"],
+                },
+            )
+            assert unsafe_loopback.status_code == 400
+            loopback = await client.post(
+                "/garden/register",
+                json={
+                    "redirect_uris": ["http://127.0.0.1:58128/callback"],
+                    "grant_types": ["authorization_code", "refresh_token"],
+                    "token_endpoint_auth_method": "client_secret_post",
+                    "scope": "garden",
+                },
+            )
+            assert loopback.status_code == 201, loopback.text
             registration = await client.post(
                 "/garden/register",
                 json={

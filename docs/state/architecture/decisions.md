@@ -11,8 +11,9 @@ Replaying one entity's events is sufficient for a household and makes correction
 **Decision: One household, SDK OAuth and a password consent page**
 ChatGPT requires compatible OAuth for private remote access. There is no user registry or
 signup. The SDK handles registration, client authentication, PKCE, tokens and discovery;
-our provider supplies household consent and durable credential storage. Only ChatGPT callback
-URLs can register. A client registration itself grants no access.
+our provider supplies household consent and durable credential storage. ChatGPT callback
+URLs and exact local loopback callbacks used by trusted desktop MCP clients are accepted;
+other callback URLs are rejected. A client registration itself grants no access.
 
 - **Alternative**: External identity provider
 - **Description**: Delegate login and token issuance to a hosted OAuth provider.

@@ -49,10 +49,10 @@ class HouseholdAuth(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
         return OAuthClientInformationFull.model_validate(record) if record else None
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
-        """Accept ChatGPT callbacks only; registration never authorizes access."""
+        """Accept ChatGPT and local-client callbacks; registration grants no access."""
         for redirect in client_info.redirect_uris or []:
             url = urlsplit(str(redirect))
-            if not (
+            chatgpt_callback = (
                 url.scheme == "https"
                 and url.netloc == "chatgpt.com"
                 and (
@@ -61,9 +61,19 @@ class HouseholdAuth(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
                 )
                 and not url.fragment
                 and not url.query
-            ):
+            )
+            loopback_callback = (
+                url.scheme == "http"
+                and url.hostname in {"127.0.0.1", "::1"}
+                and url.path == "/callback"
+                and not url.username
+                and not url.password
+                and not url.fragment
+                and not url.query
+            )
+            if not (chatgpt_callback or loopback_callback):
                 raise RegistrationError(
-                    "invalid_redirect_uri", "Only ChatGPT callbacks are allowed"
+                    "invalid_redirect_uri", "Only ChatGPT or local loopback callbacks are allowed"
                 )
         if not client_info.redirect_uris or not client_info.client_id:
             raise RegistrationError("invalid_client_metadata", "Client and redirect URI required")
