@@ -37,9 +37,7 @@ class OpenAICompatibleFastMCP(FastMCP):
         """Return tools with both current and compatibility security fields."""
         tools = await super().list_tools()
         return [
-            tool.model_copy(
-                update={"securitySchemes": tool.meta["securitySchemes"]}
-            )
+            tool.model_copy(update={"securitySchemes": tool.meta["securitySchemes"]})
             if tool.meta and "securitySchemes" in tool.meta
             else tool
             for tool in tools
