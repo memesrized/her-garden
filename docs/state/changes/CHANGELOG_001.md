@@ -1,5 +1,17 @@
 # Changes
 
+## 2026-09-13 — Advertise ChatGPT tool security at both descriptor levels
+
+- Finding: ChatGPT completed OAuth and made authenticated MCP requests, but displayed no app
+  actions. The server returned all nine tools with security schemes only in `_meta`, while the
+  OpenAI descriptor format expects a top-level `securitySchemes` field and treats `_meta` as a
+  compatibility mirror.
+- Change: Extend the SDK tool listing in one compatibility class so every descriptor carries the
+  same security declaration at both levels. Tool implementations and authorization enforcement
+  are unchanged.
+- Verification: Static checks pass and a serialized local tool listing contains all nine tools
+  with matching top-level and `_meta` declarations. A fresh ChatGPT tool scan remains required.
+
 ## 2026-09-13 — Allow the validated callback in form CSP
 
 - Finding: Removing CSP from the redirect response did not let the browser leave the garden

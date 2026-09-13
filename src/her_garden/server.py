@@ -11,6 +11,7 @@ from mcp.server.auth.provider import construct_redirect_uri
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import RequestBodyLimitMiddleware, TransportSecuritySettings
+from mcp.types import Tool as MCPTool
 from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, Field
 from starlette.applications import Starlette
@@ -27,6 +28,22 @@ from her_garden.store import GardenStore, Record
 RequestId = Annotated[
     UUID, Field(description="New UUID per operation; reuse unchanged for technical retries")
 ]
+
+
+class OpenAICompatibleFastMCP(FastMCP):
+    """Mirror tool security schemes at the top level for ChatGPT discovery."""
+
+    async def list_tools(self) -> list[MCPTool]:
+        """Return tools with both current and compatibility security fields."""
+        tools = await super().list_tools()
+        return [
+            tool.model_copy(
+                update={"securitySchemes": tool.meta["securitySchemes"]}
+            )
+            if tool.meta and "securitySchemes" in tool.meta
+            else tool
+            for tool in tools
+        ]
 
 
 def create_app(settings: Settings) -> Starlette:
@@ -47,7 +64,7 @@ def create_app(settings: Settings) -> Starlette:
             ),
             revocation_options=RevocationOptions(enabled=True),
         )
-    mcp = FastMCP(
+    mcp = OpenAICompatibleFastMCP(
         "Her Garden",
         instructions=(
             "Memory for one household. Resolve IDs before writing. Store only user-reported "

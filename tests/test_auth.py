@@ -60,6 +60,7 @@ async def test_mcp_without_auth(store: GardenStore) -> None:
             )
             tools = listed.json()["result"]["tools"]
             assert len(tools) == 9
+            assert all(tool["securitySchemes"] == [{"type": "noauth"}] for tool in tools)
             assert all(tool["_meta"]["securitySchemes"] == [{"type": "noauth"}] for tool in tools)
             assert (
                 await client.get("/.well-known/oauth-authorization-server/garden")
@@ -188,7 +189,11 @@ async def test_oauth_and_authenticated_mcp(store: GardenStore) -> None:
                     "method": "tools/list",
                 },
             )
-            assert len(listed.json()["result"]["tools"]) == 9
+            tools = listed.json()["result"]["tools"]
+            assert len(tools) == 9
+            expected_security = [{"type": "oauth2", "scopes": ["garden"]}]
+            assert all(tool["securitySchemes"] == expected_security for tool in tools)
+            assert all(tool["_meta"]["securitySchemes"] == expected_security for tool in tools)
             call = await client.post(
                 "/garden/mcp",
                 headers=headers,
