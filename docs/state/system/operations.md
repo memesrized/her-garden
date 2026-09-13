@@ -29,9 +29,9 @@ and client registration do not expose plant data. Access tokens expire after one
 refresh tokens rotate and expire after 30 days. Each refresh invalidates the previous pair.
 The consent form has CSRF protection and a ten-attempt-per-minute household login limit.
 
-The current deployment intentionally sets `AUTH_ENABLED=false`, so the internet-facing MCP
-endpoint accepts anonymous requests. The repository default remains secure (`true`), while the
-GitHub `production` environment variable records the deliberate deployment override.
+The current deployment sets `AUTH_ENABLED=true`, so the internet-facing MCP endpoint requires
+OAuth. The remote private environment and GitHub `production` environment variable both record
+this setting so later CI/CD deployments preserve it.
 
 Changing the household password does not revoke existing OAuth grants. To revoke access,
 use the OAuth revocation endpoint with the registered client credentials, or perform an

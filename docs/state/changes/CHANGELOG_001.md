@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-09-13 — Restore OAuth after hostname validation
+
+- Deployment: Set `AUTH_ENABLED=true` in both the remote private environment and the GitHub
+  `production` environment variable, then recreate only the application container.
+- Reasoning: Anonymous mode established that ChatGPT accepts the DNS hostname, so the temporary
+  access relaxation is no longer needed.
+- Verification: Anonymous initialize returns HTTP 401 with protected-resource discovery; metadata
+  advertises the hostname issuer, dynamic client registration, `garden` scope and PKCE `S256`.
+  The application is healthy and the retained tunnel remains disabled.
+
 ## 2026-09-13 — Dedicated DNS hostname
 
 - Deployment: Add a dedicated automatic-DNS hostname and publicly trusted Let's Encrypt
