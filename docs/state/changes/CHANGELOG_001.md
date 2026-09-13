@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-09-13 — Permit the browser callback navigation
+
+- Finding: With the stable callback enabled, the browser submitted the password form and received
+  HTTP 303 but remained on the garden hostname. ChatGPT therefore never received the authorization
+  code and never called the token endpoint.
+- Change: Keep the strict CSP on the rendered password form, but omit its `form-action 'self'`
+  policy from the intentional redirect to the already validated ChatGPT callback.
+- Verification: The integration test checks both the callback issuer and absence of the form-page
+  CSP on the redirect response; a fresh browser connection remains the final validation.
+
 ## 2026-09-13 — ChatGPT stable OAuth callback
 
 - Finding: ChatGPT registered a valid callback, the household password was accepted and an

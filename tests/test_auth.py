@@ -137,6 +137,7 @@ async def test_oauth_and_authenticated_mcp(store: GardenStore) -> None:
                 "/garden/login", data={"flow": flow, "csrf": csrf, "password": PASSWORD}
             )
             assert consent.status_code == 303, consent.text
+            assert "content-security-policy" not in consent.headers
             callback = parse_qs(urlsplit(consent.headers["location"]).query)
             assert callback["state"] == ["test-state"]
             assert callback["iss"] == ["http://localhost:8002/garden"]
