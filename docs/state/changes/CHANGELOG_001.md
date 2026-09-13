@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-09-13 — Allow the validated callback in form CSP
+
+- Finding: Removing CSP from the redirect response did not let the browser leave the garden
+  origin because the policy loaded with the original login document governs redirected form
+  navigation too.
+- Change: Allow `https://chatgpt.com` alongside `'self'` in the login page's `form-action` policy.
+  The form still submits only to itself, registered callbacks are already restricted to that exact
+  HTTPS origin, and framing remains forbidden.
+- Verification: The browser must now be observed leaving the garden origin and ChatGPT must call
+  the token endpoint; automated validation covers the CSP and complete OAuth exchange.
+
 ## 2026-09-13 — Permit the browser callback navigation
 
 - Finding: With the stable callback enabled, the browser submitted the password form and received

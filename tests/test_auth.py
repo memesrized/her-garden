@@ -123,6 +123,9 @@ async def test_oauth_and_authenticated_mcp(store: GardenStore) -> None:
             authorize = await client.get("/garden/authorize", params=params)
             assert authorize.status_code in {302, 303, 307}
             login = await client.get(authorize.headers["location"])
+            assert (
+                "form-action 'self' https://chatgpt.com" in login.headers["content-security-policy"]
+            )
             flow = parse_qs(urlsplit(authorize.headers["location"]).query)["flow"][0]
             csrf_match = re.search('name="csrf" value="([^"]+)"', login.text)
             assert csrf_match
@@ -137,7 +140,6 @@ async def test_oauth_and_authenticated_mcp(store: GardenStore) -> None:
                 "/garden/login", data={"flow": flow, "csrf": csrf, "password": PASSWORD}
             )
             assert consent.status_code == 303, consent.text
-            assert "content-security-policy" not in consent.headers
             callback = parse_qs(urlsplit(consent.headers["location"]).query)
             assert callback["state"] == ["test-state"]
             assert callback["iss"] == ["http://localhost:8002/garden"]
