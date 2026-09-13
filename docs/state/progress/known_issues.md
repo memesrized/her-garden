@@ -3,9 +3,10 @@
 - One shared household password and scope; no separate users, roles or tenant isolation.
 - The deployed Streamable HTTP endpoint worked in ChatGPT and Claude through its publicly trusted
   DNS hostname while anonymous mode was enabled. OAuth is enabled again and its discovery metadata
-  advertises the hostname, dynamic registration and PKCE `S256`; the authenticated ChatGPT
-  reconnection is still pending. The earlier raw-IP URL and OpenAI Secure MCP Tunnel did not work,
-  and the tunnel remains installed but stopped.
+  advertises the hostname, dynamic registration, PKCE `S256` and RFC 9207 issuer identification;
+  the stable-callback ChatGPT reconnection is still pending. Earlier callback-ID attempts accepted
+  the household password and issued a code, but ChatGPT never called the token endpoint. The
+  raw-IP URL and OpenAI Secure MCP Tunnel did not work, and the tunnel remains installed but stopped.
 - The host has an unrelated, orphaned `archivist-postgres` container publishing PostgreSQL on
   port 5432. It has a persistent Docker volume but no Compose ownership or restart policy. Her
   Garden does not use that listener; retirement requires a separate data-retention decision.

@@ -81,6 +81,7 @@ async def test_oauth_and_authenticated_mcp(store: GardenStore) -> None:
             metadata = (await client.get("/.well-known/oauth-authorization-server/garden")).json()
             assert metadata["authorization_endpoint"] == "http://localhost:8002/garden/authorize"
             assert metadata["code_challenge_methods_supported"] == ["S256"]
+            assert metadata["authorization_response_iss_parameter_supported"] is True
             bad = await client.post(
                 "/garden/register",
                 json={
@@ -136,9 +137,9 @@ async def test_oauth_and_authenticated_mcp(store: GardenStore) -> None:
                 "/garden/login", data={"flow": flow, "csrf": csrf, "password": PASSWORD}
             )
             assert consent.status_code == 303, consent.text
-            assert "content-security-policy" not in consent.headers
             callback = parse_qs(urlsplit(consent.headers["location"]).query)
             assert callback["state"] == ["test-state"]
+            assert callback["iss"] == ["http://localhost:8002/garden"]
             exchange = {
                 "grant_type": "authorization_code",
                 "code": callback["code"][0],

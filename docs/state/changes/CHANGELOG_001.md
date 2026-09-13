@@ -1,5 +1,17 @@
 # Changes
 
+## 2026-09-13 — ChatGPT stable OAuth callback
+
+- Finding: ChatGPT registered a valid callback, the household password was accepted and an
+  authorization code was issued, but ChatGPT never called the token endpoint. Removing the login
+  response CSP from the redirect did not change that boundary, so that speculative change was
+  reverted.
+- Change: Advertise RFC 9207 authorization-response issuer identification and append the exact
+  issuer to every successful or error redirect sent to a validated ChatGPT callback. This makes a
+  newly registered connection eligible for ChatGPT's stable callback path.
+- Verification: Static checks pass; the full PostgreSQL OAuth integration test and deployment
+  verification remain required before asking the owner to reconnect.
+
 ## 2026-09-13 — Restore OAuth after hostname validation
 
 - Deployment: Set `AUTH_ENABLED=true` in both the remote private environment and the GitHub

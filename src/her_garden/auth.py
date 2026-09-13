@@ -158,13 +158,10 @@ class HouseholdAuth(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshT
             subject="household",
         )
         await self._put("code", code, authorization.model_dump(mode="json"), 120)
-        redirect_headers = {
-            name: value for name, value in headers.items() if name != "Content-Security-Policy"
-        }
         response = RedirectResponse(
             construct_redirect_uri(str(params.redirect_uri), code=code, state=params.state),
             303,
-            headers=redirect_headers,
+            headers=headers,
         )
         response.delete_cookie("garden_csrf", path="/garden/login")
         return response

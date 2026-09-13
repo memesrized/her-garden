@@ -101,3 +101,6 @@ RFC 8414 path `/.well-known/oauth-authorization-server/garden`. All return the s
 issuer and `code_challenge_methods_supported: ["S256"]`. Origin-level protected-resource
 discovery similarly forwards to the garden MCP metadata. These aliases avoid 404s when
 clients probe a different discovery convention; they do not change authentication or PKCE.
+Authorization metadata also advertises RFC 9207 issuer identification, and every redirect to a
+validated ChatGPT callback includes the same exact issuer. This lets ChatGPT select its stable
+callback and reject authorization responses from a mismatched issuer.

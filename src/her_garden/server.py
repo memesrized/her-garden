@@ -3,18 +3,20 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
 
 import uvicorn
+from mcp.server.auth.provider import construct_redirect_uri
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import RequestBodyLimitMiddleware, TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, Field
 from starlette.applications import Starlette
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from her_garden.auth import SCOPE, HouseholdAuth
@@ -67,11 +69,43 @@ def create_app(settings: Settings) -> Starlette:
     )
     register_tools(mcp, store, auth_enabled=settings.auth_enabled)
     app = mcp.streamable_http_app()
+
+    async def handle_authorization_server_metadata(_request: Request) -> JSONResponse:
+        """Advertise OAuth metadata including ChatGPT callback issuer identification."""
+        return JSONResponse(
+            {
+                "issuer": settings.public_url,
+                "authorization_endpoint": f"{settings.public_url}/authorize",
+                "token_endpoint": f"{settings.public_url}/token",
+                "registration_endpoint": f"{settings.public_url}/register",
+                "revocation_endpoint": f"{settings.public_url}/revoke",
+                "scopes_supported": [SCOPE],
+                "response_types_supported": ["code"],
+                "grant_types_supported": ["authorization_code", "refresh_token"],
+                "token_endpoint_auth_methods_supported": [
+                    "client_secret_post",
+                    "client_secret_basic",
+                ],
+                "revocation_endpoint_auth_methods_supported": [
+                    "client_secret_post",
+                    "client_secret_basic",
+                ],
+                "code_challenge_methods_supported": ["S256"],
+                "authorization_response_iss_parameter_supported": True,
+            },
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
     # SDK auth handlers use fixed paths; prefix them to share an existing web server.
-    for route in app.routes:
+    for index, route in enumerate(app.routes):
         if isinstance(route, Route):
             if route.path == "/.well-known/oauth-authorization-server":
-                route.path = "/.well-known/oauth-authorization-server/garden"
+                app.routes[index] = Route(
+                    "/.well-known/oauth-authorization-server/garden",
+                    handle_authorization_server_metadata,
+                    methods=["GET", "OPTIONS"],
+                )
+                continue
             elif route.path in {"/authorize", "/token", "/register", "/revoke"}:
                 route.path = f"/garden{route.path}"
             else:
@@ -81,6 +115,22 @@ def create_app(settings: Settings) -> Starlette:
             route.path_regex, route.path_format, route.param_convertors = compile_path(route.path)
     if settings.auth_enabled:
         app.add_route("/garden/login", auth.handle_login, methods=["GET", "POST"])
+
+    async def handle_issuer_identification(
+        request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        """Attach the exact issuer to every redirect back to a ChatGPT OAuth callback."""
+        response = await call_next(request)
+        if request.url.path not in {"/garden/authorize", "/garden/login"}:
+            return response
+        location = response.headers.get("location")
+        if not location or urlsplit(location).netloc != "chatgpt.com":
+            return response
+        if "iss" not in parse_qs(urlsplit(location).query):
+            response.headers["location"] = construct_redirect_uri(location, iss=settings.public_url)
+        return response
+
+    app.add_middleware(BaseHTTPMiddleware, dispatch=handle_issuer_identification)
 
     async def handle_health(request: Request) -> JSONResponse:
         """Return readiness without exposing data or configuration."""
