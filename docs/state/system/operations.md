@@ -3,11 +3,12 @@
 ## Deployment
 
 Production runs as Compose project `her-garden` in `/home/codex/apps/her-garden` on the
-configured SSH alias `remote-machine`. The existing nginx HTTPS server includes
-`deploy/nginx-location.conf`. Its trusted IP certificate and automatic renewal already existed;
-certificate renewal remains host-managed. The app uses `/garden/mcp`, consent is `/garden/login`,
-and readiness is `/garden/health`. OAuth discovery uses the standard well-known paths.
-The existing website remains at `/`. PostgreSQL is accessible only inside the Compose network.
+configured SSH alias `remote-machine`. Nginx serves the app through a dedicated automatic-DNS
+hostname and includes `deploy/nginx-location.conf`. The hostname and certificate are host-private
+deployment configuration; certificate renewal is managed by Certbot. The app uses `/garden/mcp`,
+consent is `/garden/login`, and readiness is `/garden/health`. OAuth discovery uses the standard
+well-known paths. The hostname returns 404 at `/`, while the existing IP website remains separate.
+Her Garden's PostgreSQL is accessible only inside the Compose network.
 
 `docker compose up -d --build --wait` performs a manual deployment. Startup applies numbered
 SQL migrations under a transaction advisory lock. Never edit an already-applied migration.

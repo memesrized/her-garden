@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-09-13 — Dedicated DNS hostname
+
+- Deployment: Add a dedicated automatic-DNS hostname and publicly trusted Let's Encrypt
+  certificate in host-managed nginx, while keeping the exact hostname out of the repository.
+- Isolation: Serve only Her Garden routes on that hostname and return 404 at `/`; the existing
+  IP-hosted apps and port 8443 configuration remain unchanged.
+- Verification: The hostname resolves to the server, TLS validates, `GET /garden/mcp` opens an
+  SSE stream, and anonymous `POST initialize` returns HTTP 200 with MCP protocol `2025-11-25`.
+- Host finding: Port 5432 belongs to a separate orphaned `archivist-postgres` container and volume,
+  not the internal Her Garden PostgreSQL service. It was inspected but not modified.
+
 ## 2026-09-06 — Return to direct anonymous access
 
 - Deployment: Set the remote private `AUTH_ENABLED` value and GitHub production variable to
