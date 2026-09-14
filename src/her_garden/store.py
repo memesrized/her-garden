@@ -10,7 +10,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
-from her_garden.models import InventoryEvent, PlantEvent, PlantState
+from her_garden.models import InventoryEvent, LocationEvent, PlantEvent, PlantState
 
 Record = dict[str, Any]
 
@@ -68,6 +68,19 @@ class GardenStore:
         payload.setdefault("aliases", [])
         return await self._write(request_id, None, "plant", "created", payload)
 
+    async def append_location_event(
+        self, request_id: UUID, location_id: UUID, event: LocationEvent
+    ) -> Record:
+        """Append a location lifecycle event and rebuild its projection."""
+        return await self._write(
+            request_id,
+            location_id,
+            "location",
+            event.event_type,
+            event.model_dump(mode="json", exclude_unset=True),
+            event.occurred_at,
+        )
+
     async def append_plant_event(
         self, request_id: UUID, plant_id: UUID, event: PlantEvent
     ) -> Record:
@@ -86,6 +99,8 @@ class GardenStore:
         self, request_id: UUID, item_id: UUID | None, event: InventoryEvent
     ) -> Record:
         """Create or update supplies; new items require a name and category."""
+        if item_id is None and event.event_type in {"archive", "restore"}:
+            raise ValueError("Archive and restore require an existing inventory item")
         if item_id is None and (not event.name or not event.category):
             raise ValueError("New inventory needs name and category; reuse item_id afterward")
         if item_id is None and event.supersedes_event_id:
@@ -108,6 +123,7 @@ class GardenStore:
         status: str | None = None,
         category: str | None = None,
         query: str | None = None,
+        include_archived: bool = False,
     ) -> list[Record]:
         """Return compact current records with optional exact filters and text search."""
         async with self.pool.connection() as conn:
@@ -117,6 +133,7 @@ class GardenStore:
                     "AND (%s::text IS NULL OR state->>'location_id' = %s) "
                     "AND (%s::text IS NULL OR state->>'status' = %s) "
                     "AND (%s::text IS NULL OR state->>'category' = %s) "
+                    "AND (%s OR state->>'archived' IS DISTINCT FROM 'true') "
                     "ORDER BY lower(state->>'name'), id",
                     (
                         kind,
@@ -126,6 +143,7 @@ class GardenStore:
                         status,
                         category,
                         category,
+                        include_archived,
                     ),
                 )
             ).fetchall()
@@ -140,12 +158,20 @@ class GardenStore:
                 ).casefold()
             ):
                 continue
-            keys = (
-                ("name", "species", "aliases", "location_id", "status")
-                if kind == "plant"
-                else ("name", "category", "remaining")
+            if kind == "plant":
+                keys = ("name", "species", "aliases", "location_id", "status")
+            elif kind == "inventory":
+                keys = ("name", "category", "remaining")
+            else:
+                keys = ("name",)
+            result.append(
+                {
+                    "id": str(row["id"]),
+                    **{key: state[key] for key in keys if key in state},
+                    "archived": state.get("archived", False),
+                    "archived_at": state.get("archived_at"),
+                }
             )
-            result.append({"id": str(row["id"]), **{k: state[k] for k in keys if k in state}})
         return result
 
     async def get_plant_context(self, plant_id: UUID, history_limit: int = 20) -> Record:
@@ -170,7 +196,7 @@ class GardenStore:
                 latest[event["event_type"]] = public_event(event)
         return {
             "plant_id": str(plant_id),
-            "state": entity["state"],
+            "state": {"archived": False, **entity["state"]},
             "latest_actions": latest,
             "recent_events": [
                 {**public_event(e), "is_effective": e in active}
@@ -209,15 +235,22 @@ class GardenStore:
             if entity_id is None and kind == "location":
                 existing_location = await (
                     await conn.execute(
-                        "SELECT id FROM entities WHERE kind = 'location' "
+                        "SELECT id, state FROM entities WHERE kind = 'location' "
                         "AND lower(state->>'name') = lower(%s)",
                         (payload["name"],),
                     )
                 ).fetchone()
                 if existing_location:
+                    if existing_location["state"].get("archived", False):
+                        raise ValueError(
+                            "Location already exists but is archived; restore the existing ID"
+                        )
                     entity_id = existing_location["id"]
             if entity_id:
-                await self._entity(conn, entity_id, kind)
+                entity = await self._entity(conn, entity_id, kind)
+                await self._validate_entity_event(
+                    conn, entity, kind, event_type, payload
+                )
             else:
                 entity_id = uuid4()
                 await conn.execute(
@@ -225,7 +258,9 @@ class GardenStore:
                 )
             location = payload.get("changes", payload).get("location_id")
             if location:
-                await self._entity(conn, UUID(location), "location")
+                location_entity = await self._entity(conn, UUID(location), "location")
+                if location_entity["state"].get("archived", False):
+                    raise ValueError("Cannot use an archived location")
             events = await self._events(conn, entity_id)
             if supersedes:
                 target = next((e for e in effective_events(events) if e["id"] == supersedes), None)
@@ -258,6 +293,48 @@ class GardenStore:
                 "UPDATE entities SET state = %s WHERE id = %s", (Jsonb(state), entity_id)
             )
         return {"entity_id": str(entity_id), "event_id": str(event_id)}
+
+    @staticmethod
+    async def _validate_entity_event(
+        conn: AsyncConnection[Record],
+        entity: Record,
+        kind: str,
+        event_type: str,
+        payload: Record,
+    ) -> None:
+        """Reject invalid lifecycle transitions and conflicting location changes."""
+        archived = entity["state"].get("archived", False)
+        if event_type == "archive" and archived:
+            raise ValueError(f"{kind.title()} is already archived")
+        if event_type == "restore" and not archived:
+            raise ValueError(f"{kind.title()} is not archived")
+        if kind == "location" and event_type == "rename":
+            duplicate = await (
+                await conn.execute(
+                    "SELECT 1 FROM entities WHERE kind = 'location' AND id <> %s "
+                    "AND lower(state->>'name') = lower(%s)",
+                    (entity["id"], payload["name"]),
+                )
+            ).fetchone()
+            if duplicate:
+                raise ValueError("Another location already has that name")
+        if kind == "location" and event_type == "archive":
+            referenced = await (
+                await conn.execute(
+                    "SELECT 1 FROM entities WHERE kind = 'plant' "
+                    "AND state->>'location_id' = %s "
+                    "AND state->>'archived' IS DISTINCT FROM 'true' LIMIT 1",
+                    (str(entity["id"]),),
+                )
+            ).fetchone()
+            if referenced:
+                raise ValueError("Move or archive plants before archiving their location")
+        if kind == "plant" and event_type == "restore":
+            location_id = entity["state"].get("location_id")
+            if location_id:
+                location = await GardenStore._entity(conn, UUID(location_id), "location")
+                if location["state"].get("archived", False):
+                    raise ValueError("Restore the plant's location before restoring the plant")
 
     @staticmethod
     async def _entity(conn: AsyncConnection[Record], entity_id: UUID, kind: str) -> Record:
@@ -294,6 +371,14 @@ def project(kind: str, events: list[Record]) -> Record:
         active, key=lambda e: (e["event_type"] != "created", e["occurred_at"], e["sequence"])
     ):
         payload = event["payload"]
+        if event["event_type"] == "archive":
+            state["archived"] = True
+            state["archived_at"] = event["occurred_at"].isoformat()
+            continue
+        if event["event_type"] == "restore":
+            state["archived"] = False
+            state["archived_at"] = None
+            continue
         if kind == "plant":
             state.update(
                 payload if event["event_type"] == "created" else payload.get("changes", {})
@@ -306,8 +391,13 @@ def project(kind: str, events: list[Record]) -> Record:
                 state["remaining"] = payload.get("remaining")
             elif "remaining" in payload:
                 state["remaining"] = payload["remaining"]
-        else:
-            state.update(payload)
+        elif kind == "location":
+            if event["event_type"] == "created":
+                state["name"] = payload["name"]
+            elif event["event_type"] == "rename":
+                state["name"] = payload["name"]
+    state.setdefault("archived", False)
+    state.setdefault("archived_at", None)
     return state
 
 

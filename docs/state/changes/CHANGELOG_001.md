@@ -1,5 +1,19 @@
 # Changes
 
+## 2026-09-15 — Append-only rename, archive and restore events
+
+- Change: Add `append_location_event`; extend plant and inventory event tools with archive and
+  restore; and let location events rename without changing the stable entity ID. Normal lists and
+  search hide archived rows unless `include_archived=true`, while exact plant context remains
+  readable.
+- Safety: Events remain immutable, creation facts are preserved, archived names continue to map
+  to the original location, and a location cannot be archived while active plants reference it.
+  Existing tables and the production PostgreSQL volume require no migration or replacement.
+- Performance: Writes continue to replay only the affected entity. Lists and search filter the
+  stored JSONB projection, so no full-history scan or snapshot subsystem was added.
+- Verification: Test, lint, type-check and feature-demo commands were deliberately not run at the
+  owner's request. The branch has not been deployed.
+
 ## 2026-09-13 — Advertise ChatGPT tool security at both descriptor levels
 
 - Finding: ChatGPT completed OAuth and made authenticated MCP requests, but displayed no app

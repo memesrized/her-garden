@@ -75,12 +75,13 @@ The first real ChatGPT connection must be completed in your own account.
 
 | Tool | Purpose |
 |---|---|
-| `list_locations` / `create_location` | Stable location IDs; duplicate names reuse IDs |
+| `list_locations` / `create_location` | Stable location IDs; active duplicate names reuse IDs |
+| `append_location_event` | Rename, archive or restore a location |
 | `list_plants` / `find_plants` | Compact lookup by location/status or name/alias/species |
 | `get_plant_context` | Current state, bounded history and latest effective care actions |
 | `create_plant` | New physical plant with stable ID |
-| `append_plant_event` | Completed action, observation, attribute update or correction |
-| `get_inventory` / `append_inventory_event` | Supply memory with approximate remaining amounts |
+| `append_plant_event` | Completed action, observation, correction, archive or restore |
+| `get_inventory` / `append_inventory_event` | Supply memory, corrections, archive and restore |
 
 Every write requires a UUID `request_id`: reuse it unchanged for technical retries.
 Using the same ID with different input fails. Separate requests with equivalent meaning are
@@ -90,8 +91,16 @@ diagnoses. `changes` patches only supplied fields; explicit null clears optional
 
 Correct an event by passing its ID as `supersedes_event_id` with a complete replacement event
 and its corrected occurrence time. The original remains visible in history, marked ineffective.
-Use event type `void` to retract a mistaken event. Creation events cannot be retracted;
-plant attributes are corrected with `update`. Correct a replacement by referring to its ID.
+Use event type `void` to retract a mistaken event. Creation events cannot be retracted; archive
+the entity instead. Plant attributes are corrected with `update`, while locations use
+`append_location_event` with `rename`. Correct a replacement by referring to its ID.
+
+Archived plants, locations and inventory items remain in the event history but are hidden from
+lists and search by default. Pass `include_archived=true` to find an archived entity and append a
+`restore` event. `get_plant_context` remains available by exact plant ID while it is archived.
+Locations cannot be archived while an active plant still refers to them; move or archive those
+plants first. Creating a location whose name belongs to an archived location is rejected so the
+existing location can be restored without splitting its history.
 
 Inventory `remaining` is an absolute description after the event, not a delta. “Half a bag”
 is valid. Usage/purchase with no remaining amount makes the amount unknown rather than

@@ -8,6 +8,22 @@ Replaying one entity's events is sufficient for a household and makes correction
 - **Description**: Queue events and update current state asynchronously.
 - **Rejection reason**: Extra process and stale reads without a household-scale benefit.
 
+**Decision: Append-only entity lifecycle events**
+Plants, locations and inventory items are archived and restored by new events. Their UUIDs and
+complete histories remain intact, while the current projection makes normal list and search
+queries omit archived entities. Locations can also be renamed by event and cannot be archived
+while active plants still refer to them.
+
+- **Alternative**: Physically delete entities or events
+- **Description**: Remove mistaken or retired records directly from PostgreSQL.
+- **Rejection reason**: Loses the audit trail and conflicts with the existing immutable-event
+  database guard.
+
+- **Alternative**: Add snapshots or an asynchronous incremental projector
+- **Description**: Store replay checkpoints or update projections outside the write transaction.
+- **Rejection reason**: Current writes replay only one entity and ordinary reads already use the
+  projection; household-scale history does not justify extra state or recovery machinery.
+
 **Decision: One household, SDK OAuth and a password consent page**
 ChatGPT requires compatible OAuth for private remote access. There is no user registry or
 signup. The SDK handles registration, client authentication, PKCE, tokens and discovery;

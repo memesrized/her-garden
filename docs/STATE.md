@@ -2,7 +2,8 @@
 
 Small single-household Python MCP service backed by PostgreSQL. Approved scope is in
 `plant_memory_mcp_spec.md`; implementation adds authenticated HTTPS, location creation,
-retry safety, corrections, Compose deployment and CI/CD for `master`.
+retry safety, append-only corrections and entity lifecycle events, Compose deployment and CI/CD
+for `master`.
 
 | Area | File | Notes |
 |---|---|---|

@@ -22,7 +22,7 @@ from starlette.routing import Route
 
 from her_garden.auth import SCOPE, HouseholdAuth
 from her_garden.config import Settings
-from her_garden.models import InventoryEvent, PlantEvent, PlantState, ShortText
+from her_garden.models import InventoryEvent, LocationEvent, PlantEvent, PlantState, ShortText
 from her_garden.store import GardenStore, Record
 
 RequestId = Annotated[
@@ -188,27 +188,44 @@ def register_tools(mcp: FastMCP, store: GardenStore, *, auth_enabled: bool) -> N
     }
 
     @mcp.tool(annotations=read, meta=security)
-    async def list_locations() -> list[Record]:
-        """List available location IDs and names before filtering plants or moving one."""
-        return await store.list_entities("location")
+    async def list_locations(include_archived: bool = False) -> list[Record]:
+        """List location IDs and names; include archived locations only when requested."""
+        return await store.list_entities("location", include_archived=include_archived)
 
     @mcp.tool(annotations=write, meta=security)
     async def create_location(request_id: RequestId, name: ShortText) -> Record:
-        """Create a named location; case-insensitive existing names reuse the location ID."""
+        """Create a location or reuse an active case-insensitive match. If the matching
+        location is archived, list archived locations and restore its existing ID.
+        """
         return await store.create_location(request_id, name)
+
+    @mcp.tool(annotations=write, meta=security)
+    async def append_location_event(
+        request_id: RequestId, location_id: UUID, event: LocationEvent
+    ) -> Record:
+        """Rename, archive, or restore a location while retaining its complete history."""
+        return await store.append_location_event(request_id, location_id, event)
 
     @mcp.tool(annotations=read, meta=security)
     async def list_plants(
         location_id: UUID | None = None,
         status: Literal["active", "dormant", "dead", "given_away"] | None = None,
+        include_archived: bool = False,
     ) -> list[Record]:
-        """Return compact plant IDs and attributes, optionally filtered by location or status."""
-        return await store.list_entities("plant", location_id=location_id, status=status)
+        """List compact plant state with optional filters; archived plants are opt-in."""
+        return await store.list_entities(
+            "plant",
+            location_id=location_id,
+            status=status,
+            include_archived=include_archived,
+        )
 
     @mcp.tool(annotations=read, meta=security)
-    async def find_plants(query: ShortText) -> list[Record]:
-        """Find candidate plant IDs by case-insensitive name, alias or species substring."""
-        return await store.list_entities("plant", query=query)
+    async def find_plants(query: ShortText, include_archived: bool = False) -> list[Record]:
+        """Find plants by name, alias, or species; archived plants are optional."""
+        return await store.list_entities(
+            "plant", query=query, include_archived=include_archived
+        )
 
     @mcp.tool(annotations=read, meta=security)
     async def get_plant_context(
@@ -219,9 +236,13 @@ def register_tools(mcp: FastMCP, store: GardenStore, *, auth_enabled: bool) -> N
         return await store.get_plant_context(plant_id, history_limit)
 
     @mcp.tool(annotations=read, meta=security)
-    async def get_inventory(category: ShortText | None = None) -> list[Record]:
-        """Read supply IDs and reported amounts remaining; null is unknown, never zero."""
-        return await store.list_entities("inventory", category=category)
+    async def get_inventory(
+        category: ShortText | None = None, include_archived: bool = False
+    ) -> list[Record]:
+        """Read supplies and amounts; archived items are returned only when requested."""
+        return await store.list_entities(
+            "inventory", category=category, include_archived=include_archived
+        )
 
     @mcp.tool(annotations=write, meta=security)
     async def create_plant(request_id: RequestId, plant: PlantState) -> Record:
@@ -232,9 +253,10 @@ def register_tools(mcp: FastMCP, store: GardenStore, *, auth_enabled: bool) -> N
     async def append_plant_event(
         request_id: RequestId, plant_id: UUID, event: PlantEvent
     ) -> Record:
-        """Record a reported fact, never a planned action. Corrections fully replace the target
-        event using supersedes_event_id; use void to retract a mistaken event. Use update
-        with changes for names/aliases/status. Observations go in note, not diagnoses.
+        """Record a reported fact or lifecycle change, never a planned action. Corrections fully
+        replace the target using supersedes_event_id; use void to retract a mistaken event,
+        update with changes for attributes, and archive/restore to control visibility.
+        Observations go in note, not diagnoses.
         """
         return await store.append_plant_event(request_id, plant_id, event)
 
@@ -244,7 +266,7 @@ def register_tools(mcp: FastMCP, store: GardenStore, *, auth_enabled: bool) -> N
         event: InventoryEvent,
         item_id: UUID | None = None,
     ) -> Record:
-        """Record supply activity. Omit item_id only for a new item with name/category.
+        """Record supply activity or archive/restore an item. Omit item_id only for a new item.
         remaining describes the amount AFTER this event, not a quantity to subtract.
         Purchase/usage without remaining makes the amount unknown. Check inventory first.
         """
