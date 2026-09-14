@@ -1,8 +1,17 @@
+<p align="center">
+  <img src="docs/assets/her-garden.png" alt="Her Garden plant and care checklist" width="420">
+</p>
+
 # Her Garden
 
 A small authenticated Python MCP server giving ChatGPT persistent memory of one household's
 plants and plant-care supplies. PostgreSQL keeps immutable events and current state together.
 There is no recommendation engine, image storage, or scheduling system.
+
+> [!WARNING]
+> This project was purely vibe-coded and has not received a proper independent code review.
+> It is provided as-is, without warranty. Review the code and deployment configuration before
+> trusting it with important data or exposing it to the internet.
 
 ## Run
 
@@ -10,7 +19,7 @@ Requires Docker Compose. Python development uses Python 3.14 and uv.
 
 ```sh
 uv sync --group dev
-uv run python scripts/configure.py --public-url https://YOUR_SERVER_IP/garden
+uv run python scripts/configure.py --public-url https://YOUR_PUBLIC_HOST/garden
 docker compose up -d --build --wait
 ```
 
@@ -20,10 +29,34 @@ port 8002. Put `deploy/nginx-location.conf` inside your existing **trusted HTTPS
 block. A valid public IP certificate works; self-signed certificates are not sufficient.
 Local development can use `http://localhost:8002/garden`.
 
-## Connect ChatGPT
+## Deployment
 
-Enable developer mode where available on your ChatGPT account, then create a custom MCP
-app/connector with URL `https://YOUR_SERVER_IP/garden/mcp` and **OAuth** authentication.
+```mermaid
+flowchart LR
+  source["Python app + uv"] --> image["Docker image"]
+  image --> compose["Docker Compose"]
+  compose --> app["MCP app on 127.0.0.1:8002"]
+  compose --> db[("Persistent PostgreSQL volume")]
+  app --> nginx["nginx + trusted HTTPS"]
+  nginx --> ip["Public IP<br/>Claude / ChatGPT Work"]
+  nginx --> dns["DNS name<br/>ChatGPT Plugin"]
+```
+
+The DNS route is optional for clients that accept a public IP endpoint. ChatGPT Plugins require
+a DNS hostname that resolves to the server and is covered by the HTTPS certificate.
+
+## MCP client connection
+
+The MCP endpoint is `https://YOUR_PUBLIC_HOST/garden/mcp` and uses Streamable HTTP.
+
+- **Claude and ChatGPT Work:** the endpoint works with either a DNS hostname or a public IP,
+  provided HTTPS is trusted and the certificate is valid for the address used.
+- **ChatGPT Plugin:** use a DNS hostname. In testing, ChatGPT did not send any request to the MCP
+  server when configured with the raw IP URL, even though the same endpoint worked in other
+  clients. After adding a DNS name, ChatGPT connected and discovered the tools normally.
+
+For a ChatGPT Plugin, enable developer mode where available, then create a custom MCP connection
+with the DNS-based endpoint URL and **OAuth** authentication.
 
 Authentication is enabled by default. Production deployments read `AUTH_ENABLED` from the
 GitHub `production` environment, defaulting to `true`. Setting it to `false` temporarily
