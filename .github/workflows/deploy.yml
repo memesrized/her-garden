@@ -1,0 +1,55 @@
+name: Deploy
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+permissions:
+  contents: read
+concurrency:
+  group: production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Skip outdated builds
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          current_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/master" --jq .object.sha)
+          if [ "$current_sha" = "$DEPLOY_SHA" ]; then echo 'deploy=true' >> "$GITHUB_OUTPUT"; fi
+      - name: Build release image
+        if: steps.current.outputs.deploy == 'true'
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: docker build -t "her-garden:$DEPLOY_SHA" .
+      - name: Deploy and verify
+        if: steps.current.outputs.deploy == 'true'
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          AUTH_ENABLED: ${{ vars.AUTH_ENABLED || 'true' }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/garden_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          docker save "her-garden:$DEPLOY_SHA" | gzip | \
+            ssh -o BatchMode=yes -o IdentitiesOnly=yes -i ~/.ssh/garden_deploy \
+              "codex@$DEPLOY_HOST" "$DEPLOY_SHA $AUTH_ENABLED"
