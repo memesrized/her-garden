@@ -21,8 +21,8 @@
 - Creation events remain immutable. Entities can be archived and restored through later events;
   there is no physical deletion. Inventory and location history browsing is not exposed as a
   dedicated tool, although inventory corrections are supported by event ID.
-- The lifecycle implementation has not been tested or deployed; validation was deliberately
-  deferred at the owner's request.
+- The lifecycle implementation passes local static checks, PostgreSQL integration tests, the
+  executed demo and a live Streamable HTTP smoke flow. It has not been deployed.
 - Local backups do not survive server loss. They are retained until explicitly removed;
   monitor disk space. No off-server destination was requested.
 - App rollback does not undo migrations. Future migrations must preserve compatibility with

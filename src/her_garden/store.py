@@ -158,6 +158,7 @@ class GardenStore:
                 ).casefold()
             ):
                 continue
+            keys: tuple[str, ...]
             if kind == "plant":
                 keys = ("name", "species", "aliases", "location_id", "status")
             elif kind == "inventory":

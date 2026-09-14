@@ -11,8 +11,10 @@
   Existing tables and the production PostgreSQL volume require no migration or replacement.
 - Performance: Writes continue to replay only the affected entity. Lists and search filter the
   stored JSONB projection, so no full-history scan or snapshot subsystem was added.
-- Verification: Test, lint, type-check and feature-demo commands were deliberately not run at the
-  owner's request. The branch has not been deployed.
+- Verification: Ruff and strict mypy pass; all 12 PostgreSQL integration tests pass; and the
+  executed demo covers archive visibility and recovery. A live local Streamable HTTP smoke test
+  passed health, initialize, discovery of all ten tools, create, archive, hidden lookup, exact
+  archived context and restore. The branch has not been deployed.
 
 ## 2026-09-13 — Advertise ChatGPT tool security at both descriptor levels
 

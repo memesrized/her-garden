@@ -8,7 +8,7 @@ import psycopg
 import pytest
 from pydantic import ValidationError
 
-from her_garden.models import InventoryEvent, PlantEvent, PlantState
+from her_garden.models import InventoryEvent, LocationEvent, PlantEvent, PlantState
 from her_garden.store import GardenStore
 
 
@@ -111,6 +111,96 @@ async def test_location_and_patch_projection(store: GardenStore) -> None:
             ),
         )
     assert (await store.get_plant_context(plant_id))["total_events"] == 3
+
+
+async def test_append_only_entity_lifecycle(store: GardenStore) -> None:
+    location = await store.create_location(uuid4(), "North balcony")
+    location_id = UUID(location["entity_id"])
+    plant = await store.create_plant(
+        uuid4(), PlantState(name="Crassula", location_id=location_id)
+    )
+    plant_id = UUID(plant["entity_id"])
+    now = datetime.now(UTC)
+
+    with pytest.raises(ValueError, match="Move or archive plants"):
+        await store.append_location_event(
+            uuid4(),
+            location_id,
+            LocationEvent(event_type="archive", occurred_at=now, note="Retired location"),
+        )
+
+    await store.append_plant_event(
+        uuid4(),
+        plant_id,
+        PlantEvent(event_type="archive", occurred_at=now, note="Added by mistake"),
+    )
+    assert await store.list_entities("plant") == []
+    archived_plants = await store.list_entities("plant", include_archived=True)
+    assert archived_plants[0]["archived"] is True
+    assert (await store.get_plant_context(plant_id))["state"]["archived"] is True
+
+    await store.append_location_event(
+        uuid4(),
+        location_id,
+        LocationEvent(event_type="archive", occurred_at=now, note="No longer used"),
+    )
+    assert await store.list_entities("location") == []
+    with pytest.raises(ValueError, match="Restore the plant's location"):
+        await store.append_plant_event(
+            uuid4(),
+            plant_id,
+            PlantEvent(event_type="restore", occurred_at=now, note="Keep this plant"),
+        )
+
+    await store.append_location_event(
+        uuid4(),
+        location_id,
+        LocationEvent(event_type="restore", occurred_at=now, note="Needed again"),
+    )
+    await store.append_location_event(
+        uuid4(),
+        location_id,
+        LocationEvent(
+            event_type="rename",
+            occurred_at=now,
+            note="Use the current household name",
+            name="Sunny balcony",
+        ),
+    )
+    await store.append_plant_event(
+        uuid4(),
+        plant_id,
+        PlantEvent(event_type="restore", occurred_at=now, note="Restored after review"),
+    )
+    assert (await store.list_entities("location"))[0]["name"] == "Sunny balcony"
+    assert (await store.list_entities("plant"))[0]["archived"] is False
+
+    item = await store.append_inventory_event(
+        uuid4(),
+        None,
+        InventoryEvent(
+            event_type="observation",
+            occurred_at=now,
+            note="Found in cupboard",
+            name="Perlite",
+            category="substrate",
+            remaining="half a bag",
+        ),
+    )
+    item_id = UUID(item["entity_id"])
+    await store.append_inventory_event(
+        uuid4(),
+        item_id,
+        InventoryEvent(event_type="archive", occurred_at=now, note="Entered twice"),
+    )
+    assert await store.list_entities("inventory") == []
+    assert (await store.list_entities("inventory", include_archived=True))[0]["archived"]
+    await store.append_inventory_event(
+        uuid4(),
+        item_id,
+        InventoryEvent(event_type="restore", occurred_at=now, note="Not a duplicate"),
+    )
+    assert (await store.list_entities("inventory"))[0]["remaining"] == "half a bag"
 
 
 async def test_cross_plant_correction_rejected(store: GardenStore) -> None:
