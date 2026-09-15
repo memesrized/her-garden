@@ -30,11 +30,11 @@ def main() -> None:
             "isolated schema in TEST_DATABASE_URL and removes that schema when finished."
         ),
         nbformat.v4.new_code_cell(
-            "import json, os\nfrom pathlib import Path\nfrom uuid import UUID, uuid4\n"
-            "from datetime import UTC, datetime, timedelta\nimport psycopg\n"
+            "import json\nimport os\nfrom datetime import UTC, datetime, timedelta\n"
+            "from pathlib import Path\nfrom uuid import UUID, uuid4\n\nimport psycopg\n"
             "from psycopg import sql\nfrom psycopg.conninfo import make_conninfo\n"
-            "from her_garden.store import GardenStore\n"
-            "from her_garden.models import PlantState, PlantEvent, InventoryEvent\n\n"
+            "\nfrom her_garden.models import InventoryEvent, PlantEvent, PlantState\n"
+            "from her_garden.store import GardenStore\n\n"
             "root = Path.cwd()\n"
             "fixture = json.loads((root / 'data/demo_garden.json').read_text())\n"
             "print(fixture['provenance'])\n"
