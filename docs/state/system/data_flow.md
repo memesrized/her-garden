@@ -10,14 +10,15 @@ flowchart TD
     tools --> store
     store --> transaction["PostgreSQL transaction and household write lock"]
     transaction --> events["Append-only events with request UUIDs"]
-    events --> projection["Replay effective events by occurrence time"]
+    events --> projection["Replay one entity's effective facts and lifecycle events"]
     projection --> state["Current entity state as JSONB"]
     state --> results["Compact indexes or detailed plant context"]
     events --> results
     results --> chatgpt
 ```
 
-`server.py` registers nine tools and OAuth routes. `models.py` validates reported facts.
+`server.py` registers ten tools and OAuth routes. `models.py` validates reported facts and
+lifecycle changes.
 `store.py` uses a five-connection async pool. One transaction checks retry identity, validates
 references, inserts an event, replays that entity and updates its projection. A single
 transaction advisory lock serializes household writes. Reads do not acquire that lock.
@@ -28,6 +29,9 @@ Entities have immutable UUIDs and a kind: plant, location or inventory. Event or
 even when a reported event predates registration. Correction chains suppress all superseded
 records. Recent history includes `is_effective`; latest actions use effective facts only.
 History is bounded to 20 by default and 100 maximum, but latest care actions cover all history.
+Archive and restore are ordinary append-only events. The projection stores their current result;
+normal lists and search omit archived entities without replaying history. Callers can opt into
+archived rows, and exact plant context remains readable for recovery and auditing.
 
 `auth.py` delegates OAuth/PKCE protocol validation to the MCP SDK and persists OAuth records
 in the same database. Access tokens last one hour; refresh tokens rotate and last 30 days.

@@ -10,16 +10,19 @@
 - The host has an unrelated, orphaned `archivist-postgres` container publishing PostgreSQL on
   port 5432. It has a persistent Docker volume but no Compose ownership or restart policy. Her
   Garden does not use that listener; retirement requires a separate data-retention decision.
-- No actual plant data was supplied. The executed public demo uses explicit fictional examples
-  from the spec; production starts empty.
+- Production contains household plant data and must retain its PostgreSQL volume across deploys.
+  The executed public demo remains isolated and uses explicit fictional examples from the spec.
 - Search is case-insensitive substring matching, not typo-tolerant or semantic search.
 - Lists return all matches. Per-entity replay and full-history reads are appropriate for a
   small household; add pagination/indexed projections only if volume requires them.
 - Models must distinguish facts from plans and observations from diagnoses. Typed validation
   rejects future completions but cannot infer the truth or meaning of a free-text report.
 - Idempotency prevents technical retries, not semantic duplicates with new request UUIDs.
-- Creation events cannot be retracted. Location renaming and inventory history browsing are
-  not exposed as tools in this MVP. Inventory corrections are supported by event ID.
+- Creation events remain immutable. Entities can be archived and restored through later events;
+  there is no physical deletion. Inventory and location history browsing is not exposed as a
+  dedicated tool, although inventory corrections are supported by event ID.
+- The lifecycle implementation passes local static checks, PostgreSQL integration tests, the
+  executed demo and a live Streamable HTTP smoke flow. It has not been deployed.
 - Local backups do not survive server loss. They are retained until explicitly removed;
   monitor disk space. No off-server destination was requested.
 - App rollback does not undo migrations. Future migrations must preserve compatibility with

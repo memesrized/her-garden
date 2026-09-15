@@ -19,7 +19,10 @@ PlantAction = Literal[
     "observation",
     "update",
     "void",
+    "archive",
+    "restore",
 ]
+LocationAction = Literal["rename", "archive", "restore"]
 
 
 class StrictModel(BaseModel):
@@ -49,7 +52,7 @@ class PlantState(StrictModel):
 
 
 class PlantEvent(StrictModel):
-    """A completed action or observation, optionally replacing an earlier event."""
+    """A completed action, observation, or lifecycle change."""
 
     event_type: PlantAction
     occurred_at: AwareDatetime
@@ -69,13 +72,35 @@ class PlantEvent(StrictModel):
             raise ValueError("Observations belong in note; use update for attribute changes")
         if self.event_type == "void" and (not self.supersedes_event_id or changes):
             raise ValueError("Void requires a superseded event and no changes")
+        if self.event_type in {"archive", "restore"} and (self.supersedes_event_id or changes):
+            raise ValueError("Archive and restore events cannot change or supersede facts")
+        return self
+
+
+class LocationEvent(StrictModel):
+    """Rename, archive, or restore a location without removing its history."""
+
+    event_type: LocationAction
+    occurred_at: AwareDatetime
+    note: Note
+    name: ShortText | None = None
+
+    @model_validator(mode="after")
+    def validate_event(self) -> Self:
+        """Require completed events and a name only when renaming."""
+        if self.occurred_at > datetime.now(UTC):
+            raise ValueError("Cannot record a future location event")
+        if self.event_type == "rename" and not self.name:
+            raise ValueError("Rename requires name")
+        if self.event_type != "rename" and "name" in self.model_fields_set:
+            raise ValueError("Archive and restore events cannot rename a location")
         return self
 
 
 class InventoryEvent(StrictModel):
-    """Record supply activity and the reported amount remaining, without guessing."""
+    """Record supply activity, corrections, and lifecycle changes without guessing."""
 
-    event_type: Literal["purchase", "usage", "observation", "update", "void"]
+    event_type: Literal["purchase", "usage", "observation", "update", "void", "archive", "restore"]
     occurred_at: AwareDatetime
     note: Note
     name: ShortText | None = None
@@ -92,4 +117,9 @@ class InventoryEvent(StrictModel):
             raise ValueError("Cannot record a future inventory event")
         if self.event_type == "void" and not self.supersedes_event_id:
             raise ValueError("Void requires supersedes_event_id")
+        lifecycle_fields = {"name", "category", "remaining"} & self.model_fields_set
+        if self.event_type in {"archive", "restore"} and (
+            self.supersedes_event_id or lifecycle_fields
+        ):
+            raise ValueError("Archive and restore events cannot change or supersede facts")
         return self
