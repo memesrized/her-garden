@@ -116,9 +116,7 @@ async def test_location_and_patch_projection(store: GardenStore) -> None:
 async def test_append_only_entity_lifecycle(store: GardenStore) -> None:
     location = await store.create_location(uuid4(), "North balcony")
     location_id = UUID(location["entity_id"])
-    plant = await store.create_plant(
-        uuid4(), PlantState(name="Crassula", location_id=location_id)
-    )
+    plant = await store.create_plant(uuid4(), PlantState(name="Crassula", location_id=location_id))
     plant_id = UUID(plant["entity_id"])
     now = datetime.now(UTC)
 

@@ -223,9 +223,7 @@ def register_tools(mcp: FastMCP, store: GardenStore, *, auth_enabled: bool) -> N
     @mcp.tool(annotations=read, meta=security)
     async def find_plants(query: ShortText, include_archived: bool = False) -> list[Record]:
         """Find plants by name, alias, or species; archived plants are optional."""
-        return await store.list_entities(
-            "plant", query=query, include_archived=include_archived
-        )
+        return await store.list_entities("plant", query=query, include_archived=include_archived)
 
     @mcp.tool(annotations=read, meta=security)
     async def get_plant_context(

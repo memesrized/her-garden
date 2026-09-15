@@ -249,9 +249,7 @@ class GardenStore:
                     entity_id = existing_location["id"]
             if entity_id:
                 entity = await self._entity(conn, entity_id, kind)
-                await self._validate_entity_event(
-                    conn, entity, kind, event_type, payload
-                )
+                await self._validate_entity_event(conn, entity, kind, event_type, payload)
             else:
                 entity_id = uuid4()
                 await conn.execute(

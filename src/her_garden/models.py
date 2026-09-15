@@ -72,9 +72,7 @@ class PlantEvent(StrictModel):
             raise ValueError("Observations belong in note; use update for attribute changes")
         if self.event_type == "void" and (not self.supersedes_event_id or changes):
             raise ValueError("Void requires a superseded event and no changes")
-        if self.event_type in {"archive", "restore"} and (
-            self.supersedes_event_id or changes
-        ):
+        if self.event_type in {"archive", "restore"} and (self.supersedes_event_id or changes):
             raise ValueError("Archive and restore events cannot change or supersede facts")
         return self
 
@@ -102,9 +100,7 @@ class LocationEvent(StrictModel):
 class InventoryEvent(StrictModel):
     """Record supply activity, corrections, and lifecycle changes without guessing."""
 
-    event_type: Literal[
-        "purchase", "usage", "observation", "update", "void", "archive", "restore"
-    ]
+    event_type: Literal["purchase", "usage", "observation", "update", "void", "archive", "restore"]
     occurred_at: AwareDatetime
     note: Note
     name: ShortText | None = None
