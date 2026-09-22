@@ -59,7 +59,13 @@ async def test_mcp_without_auth(store: GardenStore) -> None:
                 },
             )
             tools = listed.json()["result"]["tools"]
-            assert len(tools) == 10
+            assert len(tools) == 17
+            assert {tool["name"] for tool in tools} >= {
+                "get_watering_schedule",
+                "set_watering_schedule",
+                "adjust_watering_schedule",
+                "set_watering_reminder_time",
+            }
             assert all(tool["securitySchemes"] == [{"type": "noauth"}] for tool in tools)
             assert all(tool["_meta"]["securitySchemes"] == [{"type": "noauth"}] for tool in tools)
             assert (
@@ -190,7 +196,7 @@ async def test_oauth_and_authenticated_mcp(store: GardenStore) -> None:
                 },
             )
             tools = listed.json()["result"]["tools"]
-            assert len(tools) == 10
+            assert len(tools) == 17
             expected_security = [{"type": "oauth2", "scopes": ["garden"]}]
             assert all(tool["securitySchemes"] == expected_security for tool in tools)
             assert all(tool["_meta"]["securitySchemes"] == expected_security for tool in tools)

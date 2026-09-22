@@ -14,6 +14,25 @@ Her Garden's PostgreSQL is accessible only inside the Compose network.
 SQL migrations under a transaction advisory lock. Never edit an already-applied migration.
 Use a new numbered SQL file and keep it compatible with the preceding application release.
 
+## Optional Telegram reminders
+
+The `telegram` Compose profile runs a separate bot process using the same private database.
+The MCP application starts and remains healthy without this profile or bot credentials. The bot
+requires `BOT_TOKEN` and a comma-separated `TG_USERNAMES` allowlist in the private server
+environment. `WATERING_TIMEZONE` selects the local calendar used for the shared reminder time;
+use an IANA timezone name. Do not put real values in the repository, build image, command line,
+or logs. The release workflow transfers an image; the server retains its private environment.
+
+To enable the bot after setting its private environment, run
+`docker compose --profile telegram up -d --no-build bot`. The bot uses outbound polling and does
+not need a public port or proxy route. Every permitted username must initiate a private chat
+with the bot before it can receive reminders. Check the bot container state and bounded logs
+after enabling it. A failed Telegram connection does not stop MCP.
+
+Later image deployments update the bot only while both bot settings are present. Removing those
+settings and deploying again stops the bot. A bot started manually without the profile is not
+part of the normal deployment path.
+
 ## Authentication and secrets
 
 Generate `.env` with `scripts/configure.py`. Keep it mode 0600, outside Git. The initial
@@ -77,8 +96,8 @@ in `authorized_keys`. This allows only deployment of an image with a full commit
 interactive shell, PTY or port forwarding. Host identity is pinned, not accepted blindly.
 
 The deployment script serializes runs with flock, loads the image, makes a backup, replaces
-only the app container and waits for readiness. On failed readiness it restores the preceding
-app image; it never deletes database volumes or automatically rewinds migrations. Successful
+the app container and an enabled bot, and waits for readiness. On failed readiness it restores
+the preceding image; it never deletes database volumes or automatically rewinds migrations. Successful
 image and auth-mode selection is saved in private `.env`. Compose/nginx/host-script changes are
 maintained separately from ordinary application-image releases.
 

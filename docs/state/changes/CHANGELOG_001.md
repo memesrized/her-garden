@@ -1,5 +1,25 @@
 # Changes
 
+## 2026-09-23 — Optional watering reminders and Telegram controls
+
+- Change: Add anchored per-plant watering schedules, a shared local reminder clock time,
+  MCP read/write tools, and an optional private Telegram bot with seven postponement and
+  series-shift buttons.
+- Reasoning: Plans stay separate from completed care events. The bot shares PostgreSQL state
+  with MCP but runs as a separate opt-in Compose service, so absent Telegram configuration
+  does not affect MCP availability.
+- Safety: Username allowlisting is checked for private bot updates and again before delivery;
+  notification state and retry IDs are durable. Credentials remain outside source and images.
+- Verification: Strict typing, lint, PostgreSQL integration tests, bot access tests, Compose
+  validation, and the executed public-fixture demo cover the new behavior.
+- Files: `src/her_garden/watering.py`, `src/her_garden/bot.py`,
+  `src/her_garden/migrations/002_watering.sql`, `src/her_garden/server.py`,
+  `src/her_garden/config.py`, `compose.yaml`, `scripts/remote-deploy.sh`, `pyproject.toml`,
+  `uv.lock`, `tests/test_watering.py`, `tests/test_bot.py`, `tests/test_auth.py`,
+  `notebooks/demos/watering_reminders.ipynb`, `README.md`, `.env.example`,
+  `docs/plant_memory_mcp_spec.md`, and current project-state files.
+
+
 ## 2026-09-15 — Append-only rename, archive and restore events
 
 - Change: Add `append_location_event`; extend plant and inventory event tools with archive and

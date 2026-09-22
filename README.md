@@ -6,7 +6,8 @@
 
 A small authenticated Python MCP server giving ChatGPT persistent memory of one household's
 plants and plant-care supplies. PostgreSQL keeps immutable events and current state together.
-There is no recommendation engine, image storage, or scheduling system.
+It also stores optional per-plant watering schedules and Telegram reminders. There is no
+recommendation engine or image storage.
 
 > [!WARNING]
 > This project was purely vibe-coded and has not received a proper independent code review.
@@ -37,6 +38,8 @@ flowchart LR
   image --> compose["Docker Compose"]
   compose --> app["MCP app on 127.0.0.1:8002"]
   compose --> db[("Persistent PostgreSQL volume")]
+  compose --> bot["Optional Telegram bot"]
+  bot --> db
   app --> nginx["nginx + trusted HTTPS"]
   nginx --> ip["Public IP<br/>Claude / ChatGPT Work"]
   nginx --> dns["DNS name<br/>ChatGPT Plugin"]
@@ -82,6 +85,9 @@ The first real ChatGPT connection must be completed in your own account.
 | `create_plant` | New physical plant with stable ID |
 | `append_plant_event` | Completed action, observation, correction, archive or restore |
 | `get_inventory` / `append_inventory_event` | Supply memory, corrections, archive and restore |
+| `get_watering_schedule` / `list_watering_schedules` | Per-plant watering plans and next reminders |
+| `set_watering_schedule` / `adjust_watering_schedule` / `clear_watering_schedule` | Set cadence, postpone one reminder, shift a series, or disable it |
+| `get_watering_reminder_time` / `set_watering_reminder_time` | Shared local clock time for ordinary reminders |
 
 Every write requires a UUID `request_id`: reuse it unchanged for technical retries.
 Using the same ID with different input fails. Separate requests with equivalent meaning are
@@ -106,6 +112,25 @@ Inventory `remaining` is an absolute description after the event, not a delta. â
 is valid. Usage/purchase with no remaining amount makes the amount unknown rather than
 inventing arithmetic. Existing items use `item_id`; new items require `name` and `category`.
 
+## Watering reminders
+
+Each enabled plant schedule has a starting date and a cadence in days. Its regular reminder dates
+stay anchored to that start. The household shares one configurable reminder clock time; the
+`WATERING_TIMEZONE` environment variable selects the local calendar timezone. Changing a schedule
+or using a reminder button never records a completed watering event.
+
+The optional bot runs as a separate Compose service. Its private environment needs `BOT_TOKEN`
+and a comma-separated `TG_USERNAMES` allowlist. Start it with
+`docker compose --profile telegram up -d bot`; without that profile or those credentials, MCP
+continues to run independently. Each allowed user must first start a private chat with the bot,
+then can use `/plants` to choose a plant and change its cadence or start date, and `/time` to
+change the shared reminder hour.
+
+Each reminder offers seven buttons: postpone this reminder by 1, 2 or 4 hours; postpone it by
+1 or 2 days; or shift the entire series by 1 or 2 days. A one-time postponement leaves the
+series anchor unchanged. A series shift moves the anchor. Only the first valid button press on
+the current reminder takes effect; older buttons expire when a newer reminder is created.
+
 ## Development and demo
 
 ```sh
@@ -117,7 +142,8 @@ uv run python scripts/build_demo.py
 ```
 
 Tests and the demo create isolated schemas in that **test database**. Do not point them at
-production. The [executed demo](notebooks/demos/plant_memory.ipynb) uses public examples from
+production. The [plant memory demo](notebooks/demos/plant_memory.ipynb) and
+[watering demo](notebooks/demos/watering_reminders.ipynb) use public examples from
 `data/demo_garden.json`, not real household data. Docker test storage is temporary.
 
 Read [project state](docs/STATE.md) for architecture and limitations, and
