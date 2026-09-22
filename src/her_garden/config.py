@@ -1,5 +1,7 @@
 """Explicit environment configuration; no usable credentials ship in the repository."""
 
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -13,6 +15,17 @@ class Settings(BaseSettings):
     household_password_hash: SecretStr
     auth_enabled: bool = True
     port: int = 8002
+    watering_timezone: str = "UTC"
+
+    @field_validator("watering_timezone")
+    @classmethod
+    def validate_watering_timezone(cls, value: str) -> str:
+        """Require a real IANA timezone for local reminder dates."""
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as error:
+            raise ValueError("WATERING_TIMEZONE must be a valid IANA timezone") from error
+        return value
 
     @field_validator("public_url")
     @classmethod

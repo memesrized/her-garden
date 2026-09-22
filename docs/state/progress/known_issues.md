@@ -1,5 +1,16 @@
 # Known limits and next steps
 
+- Telegram Bot API cannot initiate a private chat. Each allowed username must open the bot and
+  send `/start` before delivery is possible. Authorization uses the current Telegram username;
+  usernames can change or be reassigned, so the allowlist should be reviewed when access changes.
+- Notification jobs survive restarts and stale buttons are rejected. Telegram delivery and the
+  database commit are separate operations, so a crash between sending and marking a job sent can
+  produce a duplicate reminder. If the bot is offline past a due date, it sends one catch-up
+  reminder when it resumes rather than replaying every missed occurrence.
+- Reminder plans do not infer completed watering or reset themselves when a watering event is
+  recorded. A one-time postponement can supersede a nearby regular date; the next ordinary
+  reminder resumes the anchored cadence.
+
 - One shared household password and scope; no separate users, roles or tenant isolation.
 - The deployed Streamable HTTP endpoint works in ChatGPT and Claude through its publicly trusted
   DNS hostname. ChatGPT now completes OAuth and reaches authenticated MCP requests. Its first

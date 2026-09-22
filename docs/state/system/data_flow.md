@@ -4,6 +4,7 @@
 flowchart TD
     config["Private environment configuration"] --> auth["OAuth and household consent"]
     config --> store["GardenStore"]
+    config --> bot["Optional Telegram polling process"]
     chatgpt["ChatGPT tool request"] --> tls["Existing HTTPS proxy"]
     tls --> auth
     auth --> tools["FastMCP and typed payload validation"]
@@ -15,10 +16,21 @@ flowchart TD
     state --> results["Compact indexes or detailed plant context"]
     events --> results
     results --> chatgpt
+    tools --> plans["WateringStore schedule operations"]
+    bot --> plans
+    plans --> schedule[("Watering schedules and common clock time")]
+    bot --> jobs["Due reminder scan and delivery jobs"]
+    jobs --> schedule
+    jobs --> delivery[("Recipients and notification state")]
+    delivery --> bot
+    bot --> telegram["Private Telegram chats"]
 ```
 
-`server.py` registers ten tools and OAuth routes. `models.py` validates reported facts and
-lifecycle changes.
+`server.py` registers the plant-memory and watering tools plus OAuth routes. `models.py`
+validates reported facts and lifecycle changes. `watering.py` owns anchored schedules, the
+common clock time and durable notification transitions. The optional `bot.py` process checks
+private-chat usernames, handles plant selection and buttons, and polls pending notifications.
+Both processes use the same database; MCP never requires bot credentials.
 `store.py` uses a five-connection async pool. One transaction checks retry identity, validates
 references, inserts an event, replays that entity and updates its projection. A single
 transaction advisory lock serializes household writes. Reads do not acquire that lock.

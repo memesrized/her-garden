@@ -1,5 +1,24 @@
 # Decisions
 
+**Decision: Watering plans are separate from completed plant events**
+Schedules and temporary postponements are durable configuration, while a watering event remains
+a report of completed care. This prevents a reminder or button press from becoming a false fact.
+
+- **Alternative**: Store future plans as ordinary plant events
+- **Description**: Add scheduled and snoozed event types to the existing append-only history.
+- **Rejection reason**: Existing event validation and projection deliberately represent completed
+  facts; mixing plans into that stream would make care history ambiguous.
+
+**Decision: Optional polling bot with a shared PostgreSQL schedule store**
+The bot runs in its own Compose profile and uses username allowlisting for private chat actions.
+Chat IDs are retained only as delivery addresses. MCP tools remain available without bot secrets.
+
+- **Alternative**: Run the bot inside the MCP web process
+- **Description**: Start Telegram polling in the MCP application lifespan.
+- **Rejection reason**: Telegram credentials or a polling failure would couple bot availability to
+  the authenticated MCP endpoint and complicate deployment rollback.
+
+
 **Decision: PostgreSQL events plus transactional projections**
 One schema and one write transaction keep durable history and current state consistent.
 Replaying one entity's events is sufficient for a household and makes corrections predictable.

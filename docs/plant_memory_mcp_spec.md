@@ -1,5 +1,8 @@
 # Plant Memory MCP: MVP Specification
 
+This records the original MVP scope. The later watering-reminder extension is described in the
+README and current project state documents.
+
 ## Goal
 
 Build a small MCP server that gives an LLM persistent, reliable memory about a user's plants.
