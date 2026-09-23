@@ -303,12 +303,9 @@ def register_tools(
         plant_id: UUID,
         amount: Annotated[int, Field(ge=1, le=30)],
         mode: Literal["once", "series"],
-        unit: Literal["day", "hour"] = "day",
     ) -> Record:
-        """Postpone one reminder or shift the series; hours apply to one reminder only."""
-        return await watering.adjust_schedule(
-            request_id, plant_id, amount, mode, datetime.now(UTC), unit
-        )
+        """Postpone one plant by days or shift its series; hour buttons act on a whole reminder."""
+        return await watering.adjust_schedule(request_id, plant_id, amount, mode, datetime.now(UTC))
 
     @mcp.tool(annotations=write, meta=security)
     async def clear_watering_schedule(request_id: RequestId, plant_id: UUID) -> Record:

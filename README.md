@@ -126,10 +126,13 @@ continues to run independently. Each allowed user must first start a private cha
 then can use `/plants` to choose a plant and change its cadence or start date, and `/time` to
 change the shared reminder hour.
 
-Each reminder offers seven buttons: postpone this reminder by 1, 2 or 4 hours; postpone it by
-1 or 2 days; or shift the entire series by 1 or 2 days. A one-time postponement leaves the
-series anchor unchanged. A series shift moves the anchor. Only the first valid button press on
-the current reminder takes effect; older buttons expire when a newer reminder is created.
+Plants due together appear in one reminder per enrolled private chat. Each reminder offers seven
+buttons: postpone every listed plant by 1, 2 or 4 hours; postpone their next reminders by 1 or
+2 days; or shift each entire series by 1 or 2 days. A one-time postponement leaves each series
+anchor unchanged. A series shift moves the anchors. The first valid button press changes every
+listed plan in one transaction and invalidates the other recipients' buttons for that reminder.
+MCP can still change an individual plant's cadence, start date, or next day-based reminder;
+hour postponements are available on the grouped Telegram reminder only.
 
 ## Development and demo
 

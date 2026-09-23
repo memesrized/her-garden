@@ -1,4 +1,4 @@
-"""Durable per-plant watering plans and Telegram delivery state.
+"""Durable per-plant watering plans and grouped Telegram delivery state.
 
 Receives plant IDs, calendar dates, and authorized chat registrations; returns schedules and
 notification jobs. Plans are separate from completed care events, so reminders never claim
@@ -203,19 +203,16 @@ class WateringStore:
         days: int,
         mode: Adjustment,
         now: datetime,
-        unit: Literal["day", "hour"] = "day",
     ) -> Record:
-        """Postpone the next reminder or move the entire anchored series."""
+        """Postpone one plant by whole days or move its anchored series."""
         if not 1 <= days <= 30:
             raise ValueError("amount must be between 1 and 30")
-        if unit == "hour" and mode != "once":
-            raise ValueError("Hour adjustments cannot shift the series")
         request = {
             "action": "adjust",
             "plant_id": str(plant_id),
             "amount": days,
             "mode": mode,
-            "unit": unit,
+            "unit": "day",
         }
         async with self.garden.pool.connection() as conn:
             await self._lock(conn)
@@ -224,7 +221,7 @@ class WateringStore:
                 return previous
             await self._active_plant(conn, plant_id)
             row = await self._schedule_for_update(conn, plant_id)
-            result = await self._apply_adjustment(conn, row, days, mode, now, unit)
+            result = await self._apply_adjustment(conn, row, days, mode, now)
             await self._remember(conn, request_id, request, result)
             return result
 
@@ -254,12 +251,12 @@ class WateringStore:
                     "WHERE s.enabled AND s.next_due_at <= %s "
                     "AND e.state->>'archived' IS DISTINCT FROM 'true' "
                     "AND e.state->>'status' NOT IN ('dead', 'given_away') "
-                    "ORDER BY s.next_due_at, s.plant_id LIMIT 100 FOR UPDATE OF s",
+                    "ORDER BY s.next_due_at, s.plant_id FOR UPDATE OF s",
                     (now,),
                 )
             ).fetchall()
+            cycle_id = uuid4()
             for schedule in schedules:
-                cycle_id = uuid4()
                 for recipient in recipients:
                     await conn.execute(
                         "INSERT INTO watering_notifications "
@@ -305,18 +302,21 @@ class WateringStore:
                     "FROM watering_notifications n "
                     "JOIN watering_schedules s ON s.plant_id = n.plant_id "
                     "JOIN entities e ON e.id = n.plant_id "
-                    "WHERE n.status = 'pending' ORDER BY n.due_at, n.id LIMIT 200"
+                    "WHERE n.status = 'pending' ORDER BY n.due_at, n.id"
                 )
             ).fetchall()
         return rows
 
     async def mark_sent(self, notification_id: UUID, message_id: int) -> None:
-        """Record a successful Telegram send for later button validation."""
+        """Mark every pending plant in one recipient's message as sent."""
         async with self.garden.pool.connection() as conn:
             await conn.execute(
                 "UPDATE watering_notifications SET status = 'sent', sent_at = now(), "
-                "telegram_message_id = %s WHERE id = %s AND status = 'pending'",
-                (message_id, notification_id),
+                "telegram_message_id = %s WHERE cycle_id = "
+                "(SELECT cycle_id FROM watering_notifications WHERE id = %s) "
+                "AND username = (SELECT username FROM watering_notifications WHERE id = %s) "
+                "AND status = 'pending'",
+                (message_id, notification_id, notification_id),
             )
 
     async def cancel_notification(self, notification_id: UUID) -> None:
@@ -337,8 +337,8 @@ class WateringStore:
         mode: Adjustment,
         unit: Literal["day", "hour"],
         now: datetime,
-    ) -> Record:
-        """Accept only one action for the current sent reminder cycle."""
+    ) -> list[Record]:
+        """Apply one button to every plant in its message as one transaction."""
         async with self.garden.pool.connection() as conn:
             await self._lock(conn)
             notification = await (
@@ -353,17 +353,31 @@ class WateringStore:
                 or notification["chat_id"] != chat_id
             ):
                 raise ValueError("This reminder is unavailable")
-            await self._active_plant(conn, notification["plant_id"])
-            schedule = await self._schedule_for_update(conn, notification["plant_id"])
-            if schedule["active_cycle_id"] != notification["cycle_id"]:
-                raise ValueError("This reminder has already been changed")
-            result = await self._apply_adjustment(conn, schedule, amount, mode, now, unit)
+            notifications = await (
+                await conn.execute(
+                    "SELECT plant_id, cycle_id FROM watering_notifications "
+                    "WHERE cycle_id = %s AND username = %s AND status = 'sent' "
+                    "ORDER BY plant_id",
+                    (notification["cycle_id"], username),
+                )
+            ).fetchall()
+            schedules = []
+            for item in notifications:
+                await self._active_plant(conn, item["plant_id"])
+                schedule = await self._schedule_for_update(conn, item["plant_id"])
+                if schedule["active_cycle_id"] != item["cycle_id"]:
+                    raise ValueError("This reminder has already been changed")
+                schedules.append(schedule)
+            results = [
+                await self._apply_adjustment(conn, schedule, amount, mode, now, unit)
+                for schedule in schedules
+            ]
             await conn.execute(
                 "UPDATE watering_notifications SET status = 'cancelled' "
                 "WHERE cycle_id = %s AND status = 'pending'",
                 (notification["cycle_id"],),
             )
-            return result
+            return results
 
     async def _apply_adjustment(
         self,

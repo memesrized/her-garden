@@ -19,6 +19,18 @@ Chat IDs are retained only as delivery addresses. MCP tools remain available wit
   the authenticated MCP endpoint and complicate deployment rollback.
 
 
+**Decision: Group due plants by reminder cycle**
+One due scan assigns a shared cycle ID to all eligible plants. Each enrolled private chat receives
+one message listing those plants, while the notification rows retain per-plant delivery and stale
+button state. A button validates every listed plan before changing any of them in one transaction.
+Regular plans continue to use the shared clock time. Individual MCP edits are limited to whole
+days; hour buttons defer the entire message group together.
+
+- **Alternative**: Keep separate Telegram messages for each plant
+- **Description**: Continue sending each notification row independently.
+- **Rejection reason**: Several plants due together would produce repeated alerts and require
+  separate button presses for one watering session.
+
 **Decision: PostgreSQL events plus transactional projections**
 One schema and one write transaction keep durable history and current state consistent.
 Replaying one entity's events is sufficient for a household and makes corrections predictable.

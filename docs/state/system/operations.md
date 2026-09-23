@@ -29,6 +29,11 @@ not need a public port or proxy route. Every permitted username must initiate a 
 with the bot before it can receive reminders. Check the bot container state and bounded logs
 after enabling it. A failed Telegram connection does not stop MCP.
 
+Plants found due in one scan form one private-chat message for each enrolled recipient. Buttons
+apply to all plants listed in that message; a successful press in one chat invalidates the same
+group's buttons in other chats. Separate per-plant plans remain available through MCP and the bot.
+If the bot was offline, the next scan groups all overdue plans into a catch-up message.
+
 Later image deployments update the bot only while both bot settings are present. Removing those
 settings and deploying again stops the bot. A bot started manually without the profile is not
 part of the normal deployment path.

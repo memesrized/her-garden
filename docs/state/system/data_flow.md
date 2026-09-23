@@ -19,7 +19,7 @@ flowchart TD
     tools --> plans["WateringStore schedule operations"]
     bot --> plans
     plans --> schedule[("Watering schedules and common clock time")]
-    bot --> jobs["Due reminder scan and delivery jobs"]
+    bot --> jobs["Due scan and grouped delivery jobs"]
     jobs --> schedule
     jobs --> delivery[("Recipients and notification state")]
     delivery --> bot
@@ -28,8 +28,10 @@ flowchart TD
 
 `server.py` registers the plant-memory and watering tools plus OAuth routes. `models.py`
 validates reported facts and lifecycle changes. `watering.py` owns anchored schedules, the
-common clock time and durable notification transitions. The optional `bot.py` process checks
-private-chat usernames, handles plant selection and buttons, and polls pending notifications.
+common clock time and durable notification transitions. One due scan assigns the same cycle to
+all due plants, and the bot sends one message per enrolled chat for that cycle. A button changes
+all listed plans in one transaction. The optional `bot.py` process checks private-chat usernames,
+handles plant selection and buttons, and polls pending notifications.
 Both processes use the same database; MCP never requires bot credentials.
 `store.py` uses a five-connection async pool. One transaction checks retry identity, validates
 references, inserts an event, replays that entity and updates its projection. A single

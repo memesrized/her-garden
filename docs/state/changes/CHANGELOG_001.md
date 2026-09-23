@@ -1,5 +1,22 @@
 # Changes
 
+## 2026-09-23 — Group plants due together into one Telegram reminder
+
+- Change: Send one message per enrolled chat for plants due in the same scan, with one button
+  applying the selected delay or series shift to every listed plant atomically.
+- Reasoning: A shared cycle ID reuses the existing durable notification table and leaves earlier
+  one-plant messages valid. Individual MCP adjustments now use whole days so ordinary reminders
+  keep the household-wide clock time.
+- Verification: Thirty PostgreSQL and bot tests pass, including all seven grouped buttons,
+  multi-recipient stale protection, and atomic rejection; the executed public-fixture notebook
+  shows two plants in one message.
+- Files: `src/her_garden/watering.py`, `src/her_garden/bot.py`, `src/her_garden/server.py`,
+  `tests/test_watering.py`, `tests/test_bot.py`, `data/demo_garden.json`,
+  `notebooks/demos/watering_reminders.ipynb`, `README.md`, `docs/STATE.md`,
+  `docs/state/system/data_flow.md`, `docs/state/system/operations.md`,
+  `docs/state/architecture/decisions.md`, `docs/state/progress/known_issues.md`,
+  `docs/state/changes/CHANGELOG_001.md`.
+
 ## 2026-09-23 — Optional watering reminders and Telegram controls
 
 - Change: Add anchored per-plant watering schedules, a shared local reminder clock time,
