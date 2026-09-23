@@ -5,8 +5,9 @@
   usernames can change or be reassigned, so the allowlist should be reviewed when access changes.
 - Notification jobs survive restarts and stale buttons are rejected. Telegram delivery and the
   database commit are separate operations, so a crash between sending and marking a job sent can
-  produce a duplicate reminder. If the bot is offline past a due date, it sends one catch-up
-  reminder when it resumes rather than replaying every missed occurrence.
+  produce a duplicate reminder. If the bot is offline past a due date, it groups overdue plants
+  into one catch-up message per chat when it resumes rather than replaying every missed occurrence.
+  A newly edited plan can become due in a later scan on the same day; it then forms a new group.
 - Reminder plans do not infer completed watering or reset themselves when a watering event is
   recorded. A one-time postponement can supersede a nearby regular date; the next ordinary
   reminder resumes the anchored cadence.

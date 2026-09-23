@@ -275,7 +275,7 @@ class GardenBot:
         amount, mode, unit = REMINDER_ACTIONS[parts[2]]
         user, chat = update.effective_user, update.effective_chat
         assert user is not None and chat is not None and user.username is not None
-        result = await self.watering.apply_notification_action(
+        results = await self.watering.apply_notification_action(
             notification_id,
             user.username.casefold(),
             chat.id,
@@ -287,55 +287,82 @@ class GardenBot:
         query = update.callback_query
         assert query is not None
         try:
-            await query.edit_message_reply_markup(reply_markup=None)
+            message_text = str(getattr(query.message, "text", "") or "")
+            await query.edit_message_text(
+                text=f"{message_text[:3900]}\n\nПеренос применён ко всем растениям "
+                f"этого напоминания ({len(results)})."
+            )
         except BadRequest:
-            pass
-        due = datetime.fromisoformat(result["next_due_at"]).astimezone(
-            ZoneInfo(self.settings.timezone_name)
-        )
-        await self._reply(update, f"Готово. Следующее напоминание: {due:%Y-%m-%d %H:%M}.")
+            await self._reply(update, f"Перенос применён. Растений: {len(results)}.")
 
     async def run_reminders(self, app: BotApplication) -> None:
         """Poll due plans and retry unsent delivery jobs after restarts."""
         while True:
             try:
                 await self.watering.enqueue_due(datetime.now(UTC), self.settings.usernames)
+                groups: dict[tuple[UUID, str, int], list[Record]] = {}
                 for job in await self.watering.pending_notifications():
-                    await self._deliver(app, job)
+                    key = (job["cycle_id"], job["username"], job["chat_id"])
+                    groups.setdefault(key, []).append(job)
+                for jobs in groups.values():
+                    await self._deliver(app, jobs)
             except asyncio.CancelledError:
                 raise
             except Exception as error:
                 LOGGER.error("Reminder cycle failed (%s)", type(error).__name__)
             await asyncio.sleep(60)
 
-    async def _deliver(self, app: BotApplication, job: Record) -> None:
-        notification_id = job["id"]
-        if (
-            job["username"] not in self.settings.usernames
-            or not job["enabled"]
-            or job["active_cycle_id"] != job["cycle_id"]
-            or job["archived"] == "true"
-            or job["plant_status"] in {"dead", "given_away"}
-        ):
-            await self.watering.cancel_notification(notification_id)
+    async def _deliver(self, app: BotApplication, jobs: list[Record]) -> None:
+        """Send one reminder listing all still-current plants in a due group."""
+        current = []
+        for job in jobs:
+            if (
+                job["username"] not in self.settings.usernames
+                or not job["enabled"]
+                or job["active_cycle_id"] != job["cycle_id"]
+                or job["archived"] == "true"
+                or job["plant_status"] in {"dead", "given_away"}
+            ):
+                await self.watering.cancel_notification(job["id"])
+            else:
+                current.append(job)
+        if not current:
             return
+        first = current[0]
         try:
-            chat = await app.bot.get_chat(job["chat_id"])
-            if chat.type != "private" or (chat.username or "").casefold() != job["username"]:
-                await self.watering.cancel_notification(notification_id)
+            chat = await app.bot.get_chat(first["chat_id"])
+            if chat.type != "private" or (chat.username or "").casefold() != first["username"]:
+                for job in current:
+                    await self.watering.cancel_notification(job["id"])
                 return
             message = await app.bot.send_message(
-                chat_id=job["chat_id"],
-                text=f"Пора полить: {job['plant_name']}",
-                reply_markup=self._reminder_keyboard(notification_id),
+                chat_id=first["chat_id"],
+                text=self._reminder_text(current),
+                reply_markup=self._reminder_keyboard(first["id"]),
             )
         except Forbidden, BadRequest:
-            await self.watering.cancel_notification(notification_id)
+            for job in current:
+                await self.watering.cancel_notification(job["id"])
             return
         except TelegramError as error:
             LOGGER.warning("Reminder send will retry (%s)", type(error).__name__)
             return
-        await self.watering.mark_sent(notification_id, message.message_id)
+        await self.watering.mark_sent(first["id"], message.message_id)
+
+    @staticmethod
+    def _reminder_text(jobs: list[Record]) -> str:
+        """Fit a due group into Telegram's single-message text limit."""
+        lines = ["Пора полить:"]
+        length = len(lines[0])
+        for index, job in enumerate(jobs):
+            name = str(job["plant_name"]).replace("\n", " ").replace("\r", " ")[:120]
+            line = f"• {name}"
+            if length + len(line) + 100 > 4000:
+                lines.append(f"…и ещё {len(jobs) - index} растений; кнопки действуют на всех.")
+                break
+            lines.append(line)
+            length += len(line) + 1
+        return "\n".join(lines)
 
     @staticmethod
     def _reminder_keyboard(notification_id: UUID) -> InlineKeyboardMarkup:
