@@ -11,6 +11,8 @@
 - Reminder plans do not infer completed watering or reset themselves when a watering event is
   recorded. A one-time postponement can supersede a nearby regular date; the next ordinary
   reminder resumes the anchored cadence.
+- Plants have locations but no tag field. The Telegram picker groups by location and paginates
+  larger groups; dedicated tags would need a separate plant-data design and editing controls.
 
 - One shared household password and scope; no separate users, roles or tenant isolation.
 - The deployed Streamable HTTP endpoint works in ChatGPT and Claude through its publicly trusted

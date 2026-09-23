@@ -1,5 +1,19 @@
 # Changes
 
+## 2026-09-23 — Location picker and Telegram command menu
+
+- Change: Replace the long `/plants` button list with location groups, 12-plant pages, and back
+  navigation. Publish a native Telegram command menu and put direct buttons on `/start`.
+- Reasoning: Existing location IDs organize the current plants without introducing a new tag
+  field. The picker reads current projections so moves and renames appear on the next open.
+- Verification: Bot navigation tests cover grouping, the unassigned group, pagination and
+  callback back links; the executed public-fixture notebook shows the menu and a second page.
+- Files: `src/her_garden/bot.py`, `tests/test_bot.py`, `data/demo_garden.json`,
+  `notebooks/demos/telegram_navigation.ipynb`, `README.md`, `docs/STATE.md`,
+  `docs/state/system/data_flow.md`, `docs/state/system/operations.md`,
+  `docs/state/architecture/decisions.md`, `docs/state/progress/known_issues.md`,
+  `docs/state/changes/CHANGELOG_001.md`.
+
 ## 2026-09-23 — Group plants due together into one Telegram reminder
 
 - Change: Send one message per enrolled chat for plants due in the same scan, with one button

@@ -31,6 +31,17 @@ days; hour buttons defer the entire message group together.
 - **Rejection reason**: Several plants due together would produce repeated alerts and require
   separate button presses for one watering session.
 
+**Decision: Navigate plants by existing locations**
+The bot lists populated locations first and then shows at most 12 active plants per page. Plants
+without a known location remain in a separate group. Callback data carries the location and page
+so back navigation survives plant-card edits, while each screen reads current projected state.
+
+- **Alternative**: Add a tag model for the Telegram picker
+- **Description**: Extend plant events and projections with editable tags, then group by them.
+- **Rejection reason**: Plant records do not currently contain tags, while existing location IDs
+  already organize the collection. Adding a new data concept just for navigation would enlarge
+  the MCP and editing surface before its meaning is agreed.
+
 **Decision: PostgreSQL events plus transactional projections**
 One schema and one write transaction keep durable history and current state consistent.
 Replaying one entity's events is sufficient for a household and makes corrections predictable.

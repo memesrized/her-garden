@@ -33,6 +33,10 @@ Plants found due in one scan form one private-chat message for each enrolled rec
 apply to all plants listed in that message; a successful press in one chat invalidates the same
 group's buttons in other chats. Separate per-plant plans remain available through MCP and the bot.
 If the bot was offline, the next scan groups all overdue plans into a catch-up message.
+At startup the bot publishes its private-chat command list and native Telegram menu button;
+menu setup retries on a later poll if Telegram is temporarily unavailable. `/plants` reads
+existing locations and displays at most 12 active plants per page. This navigation does not
+require a new database migration or additional bot credentials.
 
 Later image deployments update the bot only while both bot settings are present. Removing those
 settings and deploying again stops the bot. A bot started manually without the profile is not
