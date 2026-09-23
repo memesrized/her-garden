@@ -4,11 +4,12 @@
 flowchart TD
     config["Private environment configuration"] --> auth["OAuth and household consent"]
     config --> store["GardenStore"]
-    config --> bot["Optional Telegram polling process"]
+    config --> bot["Optional Telegram menu and polling process"]
     chatgpt["ChatGPT tool request"] --> tls["Existing HTTPS proxy"]
     tls --> auth
     auth --> tools["FastMCP and typed payload validation"]
     tools --> store
+    bot --> store
     store --> transaction["PostgreSQL transaction and household write lock"]
     transaction --> events["Append-only events with request UUIDs"]
     events --> projection["Replay one entity's effective facts and lifecycle events"]
@@ -32,6 +33,8 @@ common clock time and durable notification transitions. One due scan assigns the
 all due plants, and the bot sends one message per enrolled chat for that cycle. A button changes
 all listed plans in one transaction. The optional `bot.py` process checks private-chat usernames,
 handles plant selection and buttons, and polls pending notifications.
+Its plant picker reads the same projected plants and locations, groups them by place, and shows
+12 plants per page. Telegram's native command menu exposes the controls without memorized commands.
 Both processes use the same database; MCP never requires bot credentials.
 `store.py` uses a five-connection async pool. One transaction checks retry identity, validates
 references, inserts an event, replays that entity and updates its projection. A single

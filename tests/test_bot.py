@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
 import pytest
+from telegram.error import TelegramError
 from telegram.ext import ApplicationHandlerStop
 
 from her_garden.bot import BotSettings, GardenBot
@@ -61,8 +62,9 @@ async def test_access_uses_username_and_private_chat(
         bot.watering.register_recipient.assert_not_awaited()
 
 
-async def test_due_group_sends_one_message_with_all_plants() -> None:
-    """Two due plans produce one complete message for each authorized chat."""
+@pytest.mark.parametrize("menu_failure", [False, True])
+async def test_due_group_sends_one_message_with_all_plants(menu_failure: bool) -> None:
+    """Menu setup failure cannot prevent due messages reaching authorized chats."""
     bot = GardenBot(
         BotSettings(
             "test-only-token",
@@ -91,6 +93,11 @@ async def test_due_group_sends_one_message_with_all_plants() -> None:
     bot.watering.mark_sent = AsyncMock()  # type: ignore[method-assign]
     bot._deliver = AsyncMock(wraps=bot._deliver)  # type: ignore[method-assign]
     app: Any = Mock()
+    app.bot.set_my_commands = AsyncMock(
+        return_value=True,
+        side_effect=TelegramError("temporary") if menu_failure else None,
+    )
+    app.bot.set_chat_menu_button = AsyncMock(return_value=True)
     app.bot.get_chat = AsyncMock(
         side_effect=lambda chat_id: Mock(
             type="private", username="first_plant" if chat_id == 1001 else "second_plant"
@@ -112,3 +119,88 @@ async def test_due_group_sends_one_message_with_all_plants() -> None:
         assert "Monstera" in sent["text"]
         assert sum(len(row) for row in sent["reply_markup"].inline_keyboard) == 7
     assert bot.watering.mark_sent.await_count == 2
+    app.bot.set_my_commands.assert_awaited_once()
+    if menu_failure:
+        app.bot.set_chat_menu_button.assert_not_awaited()
+        assert not bot.menu_ready
+    else:
+        app.bot.set_chat_menu_button.assert_awaited_once()
+        assert bot.menu_ready
+    commands = app.bot.set_my_commands.call_args.args[0]
+    assert [command.command for command in commands] == ["plants", "time", "help", "cancel"]
+
+
+async def test_plant_picker_groups_locations_and_pages() -> None:
+    """A location with many plants stays on short pages and preserves its back link."""
+    bot = GardenBot(BotSettings("test-only-token", frozenset(), "postgresql://test-only"))
+    first_id, second_id = uuid4(), uuid4()
+    locations = [
+        {"id": str(first_id), "name": "Balcony"},
+        {"id": str(second_id), "name": "Shelf"},
+    ]
+    plants = [
+        {
+            "id": str(uuid4()),
+            "name": f"Crassula {index:02}",
+            "location_id": str(first_id),
+            "status": "active",
+        }
+        for index in range(13)
+    ]
+    plants.extend(
+        [
+            {"id": str(uuid4()), "name": "Monstera", "location_id": str(second_id)},
+            {"id": str(uuid4()), "name": "Cutting"},
+            {"id": str(uuid4()), "name": "Retired", "status": "dead"},
+        ]
+    )
+    bot.garden.list_entities = AsyncMock(  # type: ignore[method-assign]
+        side_effect=lambda kind: plants if kind == "plant" else locations
+    )
+    bot.watering.get_schedule = AsyncMock(return_value=None)  # type: ignore[method-assign]
+    update: Any = Mock()
+    update.callback_query = None
+    update.effective_message.reply_text = AsyncMock()
+    context: Any = Mock(user_data={})
+    await bot.handle_plants(update, context)
+    group_markup = update.effective_message.reply_text.call_args.kwargs["reply_markup"]
+    assert [row[0].text for row in group_markup.inline_keyboard] == [
+        "Balcony (13)",
+        "Shelf (1)",
+        "Без места (1)",
+    ]
+
+    update.callback_query = Mock()
+    update.callback_query.answer = AsyncMock()
+    update.callback_query.edit_message_text = AsyncMock()
+    update.callback_query.data = f"l:{first_id}:0"
+    context.user_data["edit"] = "time"
+    await bot.handle_callback(update, context)
+    assert context.user_data == {}
+    first_markup = update.callback_query.edit_message_text.call_args.kwargs["reply_markup"]
+    assert len(first_markup.inline_keyboard) == 14
+    assert first_markup.inline_keyboard[12][0].text == "Далее →"
+    update.callback_query.data = f"l:{first_id}:1"
+    await bot.handle_callback(update, context)
+    second_markup = update.callback_query.edit_message_text.call_args.kwargs["reply_markup"]
+    assert len(second_markup.inline_keyboard) == 3
+    assert second_markup.inline_keyboard[0][0].callback_data == f"p:{plants[12]['id']}:1"
+    update.callback_query.data = f"p:{plants[12]['id']}:1"
+    await bot.handle_callback(update, context)
+    plant_markup = update.callback_query.edit_message_text.call_args.kwargs["reply_markup"]
+    assert plant_markup.inline_keyboard[-1][0].callback_data == f"l:{first_id}:1"
+    update.callback_query.data = "l:none:0"
+    await bot.handle_callback(update, context)
+    unassigned_markup = update.callback_query.edit_message_text.call_args.kwargs["reply_markup"]
+    assert len(unassigned_markup.inline_keyboard) == 2
+    assert unassigned_markup.inline_keyboard[0][0].text == "Cutting"
+
+
+async def test_start_offers_visible_navigation_buttons() -> None:
+    """The start screen lets an authorized user navigate without typing commands."""
+    bot = GardenBot(BotSettings("test-only-token", frozenset(), "postgresql://test-only"))
+    update: Any = Mock(callback_query=None)
+    update.effective_message.reply_text = AsyncMock()
+    await bot.handle_start(update, Mock())
+    markup = update.effective_message.reply_text.call_args.kwargs["reply_markup"]
+    assert [row[0].text for row in markup.inline_keyboard] == ["Растения", "Общее время"]

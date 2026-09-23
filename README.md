@@ -126,6 +126,12 @@ continues to run independently. Each allowed user must first start a private cha
 then can use `/plants` to choose a plant and change its cadence or start date, and `/time` to
 change the shared reminder hour.
 
+The Telegram command menu lists the bot's controls, and `/start` includes buttons for plants
+and the shared time. `/plants` first groups active plants by their existing locations, with an
+extra group for plants without a location. Each location has pages of at most 12 plants and a
+back button from each plant card. Locations are existing plant data; separate tags are not
+currently stored.
+
 Plants due together appear in one reminder per enrolled private chat. Each reminder offers seven
 buttons: postpone every listed plant by 1, 2 or 4 hours; postpone their next reminders by 1 or
 2 days; or shift each entire series by 1 or 2 days. A one-time postponement leaves each series
@@ -146,8 +152,10 @@ uv run python scripts/build_demo.py
 
 Tests and the demo create isolated schemas in that **test database**. Do not point them at
 production. The [plant memory demo](notebooks/demos/plant_memory.ipynb) and
-[watering demo](notebooks/demos/watering_reminders.ipynb) use public examples from
-`data/demo_garden.json`, not real household data. Docker test storage is temporary.
+[watering demo](notebooks/demos/watering_reminders.ipynb) use the test database. The
+[Telegram navigation demo](notebooks/demos/telegram_navigation.ipynb) uses mocks. All three
+use public examples from `data/demo_garden.json`, not real household data. Docker test storage
+is temporary.
 
 Read [project state](docs/STATE.md) for architecture and limitations, and
 [operations](docs/state/system/operations.md) for backups, recovery and CI/CD.

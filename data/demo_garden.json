@@ -1,6 +1,7 @@
 {
   "provenance": "Public demonstration fixture based on examples in docs/plant_memory_mcp_spec.md; not private household data.",
   "location": "north balcony",
+  "second_location": "bedroom shelf",
   "plant": {"name": "Crassula", "species": "Crassula ovata", "aliases": ["jade plant"]},
   "second_plant": {"name": "Monstera", "species": "Monstera deliciosa"},
   "inventory": {"name": "Perlite", "category": "substrate", "remaining": "about half a bag"}

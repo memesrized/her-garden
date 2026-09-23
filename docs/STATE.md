@@ -4,7 +4,7 @@ Small single-household Python MCP service backed by PostgreSQL. Approved scope i
 `plant_memory_mcp_spec.md`; implementation adds authenticated HTTPS, location creation,
 retry safety, append-only corrections and entity lifecycle events, Compose deployment and CI/CD
 for `master`. A later extension adds per-plant watering schedules and an optional Telegram bot
-with grouped reminders for plants due together;
+with grouped reminders for plants due together and location-based Telegram navigation;
 the original MVP specification remains a record of its initial scope.
 
 | Area | File | Notes |

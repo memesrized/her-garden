@@ -15,7 +15,14 @@ from typing import Any, Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 from zoneinfo import ZoneInfo
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    BotCommand,
+    BotCommandScopeAllPrivateChats,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    MenuButtonCommands,
+    Update,
+)
 from telegram.error import BadRequest, Forbidden, TelegramError
 from telegram.ext import (
     Application,
@@ -44,6 +51,7 @@ REMINDER_ACTIONS: dict[str, tuple[Literal[1, 2, 4], Adjustment, Literal["day", "
     "s2": (2, "series", "day"),
 }
 BotApplication = Application[Any, Any, Any, Any, Any, Any]
+PLANTS_PER_PAGE = 12
 
 
 @dataclass(frozen=True)
@@ -82,6 +90,7 @@ class GardenBot:
         self.garden = GardenStore(settings.database_url)
         self.watering = WateringStore(self.garden, settings.timezone_name)
         self.worker: asyncio.Task[None] | None = None
+        self.menu_ready = False
 
     def build_application(self) -> BotApplication:
         """Register username access checks before commands and callbacks."""
@@ -92,6 +101,7 @@ class GardenBot:
         app.add_handler(CommandHandler("start", self.handle_start))
         app.add_handler(CommandHandler("plants", self.handle_plants))
         app.add_handler(CommandHandler("time", self.handle_time))
+        app.add_handler(CommandHandler("help", self.handle_help))
         app.add_handler(CommandHandler("cancel", self.handle_cancel))
         app.add_handler(CallbackQueryHandler(self.handle_callback))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
@@ -127,26 +137,104 @@ class GardenBot:
 
     async def handle_start(self, update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
         """Explain controls after enrolling a permitted private chat."""
-        if update.effective_message:
-            await update.effective_message.reply_text(
-                "Напоминания о поливе включены для этого чата. "
-                "Откройте /plants для расписаний, /time для общего времени. "
-                "Изменения расписания доступны также через MCP."
-            )
+        await self._reply(
+            update,
+            "Напоминания о поливе включены для этого чата. "
+            "Откройте растения или общее время кнопкой ниже. "
+            "Изменения расписания доступны также через MCP.",
+            self._menu_keyboard(),
+        )
 
     async def handle_plants(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Show a compact plant picker with stable IDs in callback payloads."""
+        """Show locations first so a large plant collection stays navigable."""
         self._user_data(context).clear()
-        plants = await self.garden.list_entities("plant")
-        plants = [plant for plant in plants if plant.get("status") not in {"dead", "given_away"}]
+        await self._show_locations(update)
+
+    async def handle_help(self, update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Explain the bot's controls without requiring command recall."""
+        await self._reply(
+            update,
+            "Растения: выберите место, затем растение и измените его график. "
+            "Общее время: задайте час плановых напоминаний. "
+            "Кнопки под напоминанием переносят все растения в нём. "
+            "Отменить незаконченный ввод можно командой /cancel.",
+            self._menu_keyboard(),
+        )
+
+    async def _show_locations(self, update: Update) -> None:
+        plants = await self._active_plants()
         if not plants:
-            await self._reply(update, "Пока нет активных растений.")
+            await self._show_menu(update, "Пока нет активных растений.", self._menu_keyboard())
             return
+        locations = await self.garden.list_entities("location")
+        counts = self._location_counts(plants, locations)
         rows = [
-            [InlineKeyboardButton(str(plant["name"])[:60], callback_data=f"p:{plant['id']}")]
-            for plant in plants[:100]
+            [InlineKeyboardButton(f"{name[:50]} ({count})", callback_data=f"l:{key}:0")]
+            for key, name, count in counts
         ]
-        await self._reply(update, "Выберите растение:", InlineKeyboardMarkup(rows))
+        await self._show_menu(update, "Выберите место:", InlineKeyboardMarkup(rows))
+
+    async def _show_location(self, update: Update, location_key: str, page: int) -> None:
+        if page < 0:
+            raise ValueError("Страница недоступна")
+        locations = await self.garden.list_entities("location")
+        names = {str(location["id"]): str(location["name"]) for location in locations}
+        if location_key != "none" and location_key not in names:
+            raise ValueError("Место больше недоступно. Откройте /plants снова")
+        plants = await self._active_plants()
+        selected = [plant for plant in plants if self._location_key(plant, names) == location_key]
+        if not selected:
+            await self._show_menu(
+                update,
+                "В этом месте больше нет активных растений.",
+                InlineKeyboardMarkup([[InlineKeyboardButton("← К местам", callback_data="g")]]),
+            )
+            return
+        total_pages = (len(selected) + PLANTS_PER_PAGE - 1) // PLANTS_PER_PAGE
+        page = min(page, total_pages - 1)
+        rows = [
+            [InlineKeyboardButton(str(plant["name"])[:60], callback_data=f"p:{plant['id']}:{page}")]
+            for plant in selected[page * PLANTS_PER_PAGE : (page + 1) * PLANTS_PER_PAGE]
+        ]
+        navigation = []
+        if page:
+            navigation.append(
+                InlineKeyboardButton("← Назад", callback_data=f"l:{location_key}:{page - 1}")
+            )
+        if page + 1 < total_pages:
+            navigation.append(
+                InlineKeyboardButton("Далее →", callback_data=f"l:{location_key}:{page + 1}")
+            )
+        if navigation:
+            rows.append(navigation)
+        rows.append([InlineKeyboardButton("← К местам", callback_data="g")])
+        name = names.get(location_key, "Без места")
+        await self._show_menu(
+            update,
+            f"{name} · {len(selected)} растений · {page + 1}/{total_pages}",
+            InlineKeyboardMarkup(rows),
+        )
+
+    async def _active_plants(self) -> list[Record]:
+        plants = await self.garden.list_entities("plant")
+        return [plant for plant in plants if plant.get("status") not in {"dead", "given_away"}]
+
+    @staticmethod
+    def _location_key(plant: Record, location_names: dict[str, str]) -> str:
+        key = str(plant.get("location_id") or "none")
+        return key if key in location_names else "none"
+
+    @classmethod
+    def _location_counts(
+        cls, plants: list[Record], locations: list[Record]
+    ) -> list[tuple[str, str, int]]:
+        names = {str(location["id"]): str(location["name"]) for location in locations}
+        counts: dict[str, int] = {}
+        for plant in plants:
+            key = cls._location_key(plant, names)
+            counts[key] = counts.get(key, 0) + 1
+        labels = [(key, names.get(key, "Без места"), count) for key, count in counts.items()]
+        return sorted(labels, key=lambda item: (item[0] == "none", item[1].casefold(), item[0]))
 
     async def handle_time(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Prompt for the shared reminder clock time."""
@@ -168,15 +256,27 @@ class GardenBot:
         try:
             if data.startswith("w:"):
                 await self._handle_reminder(update, data)
+            elif data == "g":
+                self._user_data(context).clear()
+                await self._show_locations(update)
+            elif data == "t":
+                await self.handle_time(update, context)
+            elif data.startswith("l:"):
+                self._user_data(context).clear()
+                location_key, raw_page = data[2:].rsplit(":", 1)
+                await self._show_location(update, location_key, int(raw_page))
             elif data.startswith("p:"):
-                await self._show_plant(update, UUID(data[2:]))
+                self._user_data(context).clear()
+                plant_id, page = self._plant_and_page(data[2:])
+                await self._show_plant(update, plant_id, page)
             elif data.startswith("e:"):
-                kind, raw_plant_id = data[2:].split(":", 1)
-                await self._prompt_plant(update, context, kind, UUID(raw_plant_id))
+                kind, remainder = data[2:].split(":", 1)
+                plant_id, page = self._plant_and_page(remainder)
+                await self._prompt_plant(update, context, kind, plant_id, page)
             elif data.startswith("x:"):
-                selected_plant_id = UUID(data[2:])
+                selected_plant_id, page = self._plant_and_page(data[2:])
                 await self.watering.clear_schedule(self._request_id(update), selected_plant_id)
-                await self._show_plant(update, selected_plant_id)
+                await self._show_plant(update, selected_plant_id, page)
         except (ValueError, KeyError) as error:
             await self._reply(update, str(error))
 
@@ -213,20 +313,27 @@ class GardenBot:
                 await self.watering.set_schedule(
                     self._request_id(update), plant_id, anchor, cadence, datetime.now(UTC)
                 )
-                await self._show_plant(update, plant_id)
+                await self._show_plant(update, plant_id, int(user_data.get("page", 0)))
             user_data.clear()
         except (ValueError, KeyError) as error:
             await self._reply(update, f"{error}\nПопробуйте снова или /cancel.")
 
-    async def _show_plant(self, update: Update, plant_id: UUID) -> None:
+    async def _show_plant(self, update: Update, plant_id: UUID, page: int = 0) -> None:
         plants = await self.garden.list_entities("plant")
         plant = next((item for item in plants if item["id"] == str(plant_id)), None)
         if plant is None:
             raise ValueError("Растение больше недоступно")
+        locations = await self.garden.list_entities("location")
+        names = {str(location["id"]): str(location["name"]) for location in locations}
+        location_key = self._location_key(plant, names)
         schedule = await self.watering.get_schedule(plant_id)
         if schedule is None or not schedule["enabled"]:
             rows = [
-                [InlineKeyboardButton("Добавить расписание", callback_data=f"e:new:{plant_id}")]
+                [
+                    InlineKeyboardButton(
+                        "Добавить расписание", callback_data=f"e:new:{plant_id}:{page}"
+                    )
+                ]
             ]
             description = "Расписание не задано."
         else:
@@ -238,28 +345,39 @@ class GardenBot:
                 f"Следующее напоминание: {local_due:%Y-%m-%d %H:%M}."
             )
             rows = [
-                [InlineKeyboardButton("Изменить интервал", callback_data=f"e:cadence:{plant_id}")],
                 [
                     InlineKeyboardButton(
-                        "Изменить дату начала", callback_data=f"e:anchor:{plant_id}"
+                        "Изменить интервал", callback_data=f"e:cadence:{plant_id}:{page}"
                     )
                 ],
-                [InlineKeyboardButton("Отключить", callback_data=f"x:{plant_id}")],
+                [
+                    InlineKeyboardButton(
+                        "Изменить дату начала", callback_data=f"e:anchor:{plant_id}:{page}"
+                    )
+                ],
+                [InlineKeyboardButton("Отключить", callback_data=f"x:{plant_id}:{page}")],
             ]
-        await self._reply(
+        rows.append([InlineKeyboardButton("← К списку", callback_data=f"l:{location_key}:{page}")])
+        await self._show_menu(
             update,
             f"{plant['name']}\n{description}",
             InlineKeyboardMarkup(rows),
         )
 
     async def _prompt_plant(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE, kind: str, plant_id: UUID
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        kind: str,
+        plant_id: UUID,
+        page: int = 0,
     ) -> None:
         if kind not in {"new", "cadence", "anchor"}:
             raise ValueError("Неизвестное действие")
         user_data = self._user_data(context)
         user_data["edit"] = kind
         user_data["plant_id"] = str(plant_id)
+        user_data["page"] = page
         prompt = {
             "new": "Введите интервал и дату начала: 3 2026-10-01",
             "cadence": "Введите новый интервал в днях, например 3",
@@ -299,6 +417,12 @@ class GardenBot:
         """Poll due plans and retry unsent delivery jobs after restarts."""
         while True:
             try:
+                if not self.menu_ready:
+                    try:
+                        await self._configure_menu(app)
+                        self.menu_ready = True
+                    except TelegramError as error:
+                        LOGGER.warning("Menu setup will retry (%s)", type(error).__name__)
                 await self.watering.enqueue_due(datetime.now(UTC), self.settings.usernames)
                 groups: dict[tuple[UUID, str, int], list[Record]] = {}
                 for job in await self.watering.pending_notifications():
@@ -311,6 +435,18 @@ class GardenBot:
             except Exception as error:
                 LOGGER.error("Reminder cycle failed (%s)", type(error).__name__)
             await asyncio.sleep(60)
+
+    @staticmethod
+    async def _configure_menu(app: BotApplication) -> None:
+        """Publish private-chat command hints and Telegram's native menu button."""
+        commands = [
+            BotCommand("plants", "Выбрать растение и настроить полив"),
+            BotCommand("time", "Изменить общее время напоминаний"),
+            BotCommand("help", "Показать возможности бота"),
+            BotCommand("cancel", "Отменить ввод"),
+        ]
+        await app.bot.set_my_commands(commands, scope=BotCommandScopeAllPrivateChats())
+        await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
     async def _deliver(self, app: BotApplication, jobs: list[Record]) -> None:
         """Send one reminder listing all still-current plants in a due group."""
@@ -388,6 +524,35 @@ class GardenBot:
     @staticmethod
     def _request_id(update: Update) -> UUID:
         return uuid5(NAMESPACE_URL, f"her-garden-bot:{update.update_id}")
+
+    @staticmethod
+    def _plant_and_page(value: str) -> tuple[UUID, int]:
+        parts = value.split(":")
+        if len(parts) not in (1, 2):
+            raise ValueError("Кнопка устарела")
+        page = int(parts[1]) if len(parts) == 2 else 0
+        if page < 0:
+            raise ValueError("Страница недоступна")
+        return UUID(parts[0]), page
+
+    @staticmethod
+    def _menu_keyboard() -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("Растения", callback_data="g")],
+                [InlineKeyboardButton("Общее время", callback_data="t")],
+            ]
+        )
+
+    async def _show_menu(self, update: Update, text: str, markup: InlineKeyboardMarkup) -> None:
+        query = update.callback_query
+        if query:
+            try:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                return
+            except BadRequest:
+                pass
+        await self._reply(update, text, markup)
 
     @staticmethod
     def _user_data(context: ContextTypes.DEFAULT_TYPE) -> dict[Any, Any]:
