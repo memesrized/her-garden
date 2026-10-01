@@ -142,13 +142,9 @@ async def test_common_time_moves_day_postponement_with_regular_reminder(
     await watering.enqueue_due(due, frozenset({"first_plant"}))
     job = (await watering.pending_notifications())[0]
     await watering.mark_sent(job["id"], 77)
-    await watering.apply_notification_action(
-        job["id"], "first_plant", 1001, 1, "once", "day", due
-    )
+    await watering.apply_notification_action(job["id"], "first_plant", 1001, 1, "once", "day", due)
 
-    await watering.set_reminder_time(
-        uuid4(), time(18), datetime(2026, 9, 30, 17, 37, tzinfo=UTC)
-    )
+    await watering.set_reminder_time(uuid4(), time(18), datetime(2026, 9, 30, 17, 37, tzinfo=UTC))
     first_schedule = await watering.get_schedule(first_id)
     second_schedule = await watering.get_schedule(second_id)
     assert first_schedule is not None
@@ -157,9 +153,7 @@ async def test_common_time_moves_day_postponement_with_regular_reminder(
     assert first_schedule["next_due_at"] == "2026-10-01T18:00:00+00:00"
     assert second_schedule["next_due_at"] == "2026-10-01T18:00:00+00:00"
     assert (
-        await watering.enqueue_due(
-            datetime(2026, 10, 1, 9, tzinfo=UTC), frozenset({"first_plant"})
-        )
+        await watering.enqueue_due(datetime(2026, 10, 1, 9, tzinfo=UTC), frozenset({"first_plant"}))
         == 0
     )
     assert (
