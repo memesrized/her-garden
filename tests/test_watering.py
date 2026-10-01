@@ -126,6 +126,50 @@ async def test_common_time_preserves_hour_snooze(store: GardenStore) -> None:
     assert (await watering.get_schedule(second_id))["next_due_at"] == "2026-09-23T14:00:00+00:00"  # type: ignore[index]
 
 
+async def test_common_time_moves_day_postponement_with_regular_reminder(
+    store: GardenStore,
+) -> None:
+    """A one-day delay follows a later shared clock change without moving its series."""
+    first = await store.create_plant(uuid4(), PlantState(name="Crassula"))
+    second = await store.create_plant(uuid4(), PlantState(name="Monstera"))
+    first_id, second_id = UUID(first["entity_id"]), UUID(second["entity_id"])
+    watering = WateringStore(store, "UTC")
+    before = datetime(2026, 9, 30, 8, tzinfo=UTC)
+    await watering.set_schedule(uuid4(), first_id, date(2026, 9, 30), 3, before)
+    await watering.set_schedule(uuid4(), second_id, date(2026, 10, 1), 3, before)
+    await watering.register_recipient("first_plant", 1001)
+    due = datetime(2026, 9, 30, 10, tzinfo=UTC)
+    await watering.enqueue_due(due, frozenset({"first_plant"}))
+    job = (await watering.pending_notifications())[0]
+    await watering.mark_sent(job["id"], 77)
+    await watering.apply_notification_action(
+        job["id"], "first_plant", 1001, 1, "once", "day", due
+    )
+
+    await watering.set_reminder_time(
+        uuid4(), time(18), datetime(2026, 9, 30, 17, 37, tzinfo=UTC)
+    )
+    first_schedule = await watering.get_schedule(first_id)
+    second_schedule = await watering.get_schedule(second_id)
+    assert first_schedule is not None
+    assert second_schedule is not None
+    assert first_schedule["anchor_date"] == "2026-09-30"
+    assert first_schedule["next_due_at"] == "2026-10-01T18:00:00+00:00"
+    assert second_schedule["next_due_at"] == "2026-10-01T18:00:00+00:00"
+    assert (
+        await watering.enqueue_due(
+            datetime(2026, 10, 1, 9, tzinfo=UTC), frozenset({"first_plant"})
+        )
+        == 0
+    )
+    assert (
+        await watering.enqueue_due(
+            datetime(2026, 10, 1, 18, tzinfo=UTC), frozenset({"first_plant"})
+        )
+        == 2
+    )
+
+
 async def test_group_button_rejects_stale_plant_atomically(store: GardenStore) -> None:
     """A changed plan invalidates the whole button before any group member is moved."""
     plants = [

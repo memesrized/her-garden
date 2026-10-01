@@ -26,6 +26,15 @@ button state. A button validates every listed plan before changing any of them i
 Regular plans continue to use the shared clock time. Individual MCP edits are limited to whole
 days; hour buttons defer the entire message group together.
 
+A day postponement changes the next local calendar date, so later changes to the shared clock
+time also change its due hour. An hour snooze represents an exact temporary due instant and
+keeps that instant when the shared clock changes. Both leave completed care events untouched.
+
+- **Alternative**: Preserve the due hour for every one-time postponement
+- **Description**: Mark both day and hour button actions as exact-time overrides.
+- **Rejection reason**: A day-postponed plant could arrive at an obsolete hour alongside plants
+  following the updated household time, defeating the single shared ordinary reminder time.
+
 - **Alternative**: Keep separate Telegram messages for each plant
 - **Description**: Continue sending each notification row independently.
 - **Rejection reason**: Several plants due together would produce repeated alerts and require

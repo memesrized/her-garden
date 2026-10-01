@@ -31,7 +31,9 @@ flowchart TD
 validates reported facts and lifecycle changes. `watering.py` owns anchored schedules, the
 common clock time and durable notification transitions. One due scan assigns the same cycle to
 all due plants, and the bot sends one message per enrolled chat for that cycle. A button changes
-all listed plans in one transaction. The optional `bot.py` process checks private-chat usernames,
+all listed plans in one transaction. Changing the shared clock time reschedules ordinary and
+day-postponed reminders for their existing dates, but preserves exact-time hour snoozes. The
+optional `bot.py` process checks private-chat usernames,
 handles plant selection and buttons, and polls pending notifications.
 Its plant picker reads the same projected plants and locations, groups them by place, and shows
 12 plants per page. Telegram's native command menu exposes the controls without memorized commands.
