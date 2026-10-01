@@ -55,7 +55,7 @@ class WateringStore:
     async def set_reminder_time(
         self, request_id: UUID, reminder_time: time, now: datetime
     ) -> Record:
-        """Change the common clock time while preserving temporary snoozes."""
+        """Change the common clock time while preserving hourly snoozes."""
         request = {
             "action": "set_time",
             "reminder_time": reminder_time.isoformat(timespec="minutes"),
@@ -421,7 +421,7 @@ class WateringStore:
                 "manual_override = %s, active_cycle_id = NULL, active_due_at = NULL, "
                 "updated_at = now() "
                 "WHERE plant_id = %s RETURNING *",
-                (anchor, next_due, mode == "once", schedule["plant_id"]),
+                (anchor, next_due, mode == "once" and unit == "hour", schedule["plant_id"]),
             )
         ).fetchone()
         assert row is not None

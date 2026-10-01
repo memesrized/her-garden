@@ -1,5 +1,19 @@
 # Changes
 
+## 2026-10-01 — Apply shared time to day-postponed reminders
+
+- Change: Day postponements retain their target date and follow later changes to the common
+  reminder time. Hour snoozes continue to preserve their exact temporary due time.
+- Reasoning: A day button changes the calendar date, whereas an hour button requests a specific
+  delay. Treating both as exact-time overrides caused reminders to use the previous clock time.
+- Verification: A PostgreSQL regression test reproduces the 09:00 versus 18:00 mismatch before
+  the fix and passes afterward alongside the hour-snooze test; the executed public-fixture demo
+  shows a day postponement moving when the shared time changes.
+- Files: `src/her_garden/watering.py`, `tests/test_watering.py`,
+  `notebooks/demos/watering_reminders.ipynb`, `README.md`, `docs/STATE.md`,
+  `docs/state/system/data_flow.md`, `docs/state/architecture/decisions.md`,
+  `docs/state/changes/CHANGELOG_001.md`.
+
 ## 2026-09-23 — Location picker and Telegram command menu
 
 - Change: Replace the long `/plants` button list with location groups, 12-plant pages, and back

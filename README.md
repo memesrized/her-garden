@@ -137,6 +137,8 @@ buttons: postpone every listed plant by 1, 2 or 4 hours; postpone their next rem
 2 days; or shift each entire series by 1 or 2 days. A one-time postponement leaves each series
 anchor unchanged. A series shift moves the anchors. The first valid button press changes every
 listed plan in one transaction and invalidates the other recipients' buttons for that reminder.
+If the shared clock time changes afterward, day-postponed reminders move to that new time;
+hour-postponed reminders retain their exact temporary due time.
 MCP can still change an individual plant's cadence, start date, or next day-based reminder;
 hour postponements are available on the grouped Telegram reminder only.
 
