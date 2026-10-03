@@ -127,7 +127,13 @@ async def test_due_group_sends_one_message_with_all_plants(menu_failure: bool) -
         app.bot.set_chat_menu_button.assert_awaited_once()
         assert bot.menu_ready
     commands = app.bot.set_my_commands.call_args.args[0]
-    assert [command.command for command in commands] == ["plants", "time", "help", "cancel"]
+    assert [command.command for command in commands] == [
+        "plants",
+        "watering_plan",
+        "time",
+        "help",
+        "cancel",
+    ]
 
 
 async def test_plant_picker_groups_locations_and_pages() -> None:
@@ -203,4 +209,115 @@ async def test_start_offers_visible_navigation_buttons() -> None:
     update.effective_message.reply_text = AsyncMock()
     await bot.handle_start(update, Mock())
     markup = update.effective_message.reply_text.call_args.kwargs["reply_markup"]
-    assert [row[0].text for row in markup.inline_keyboard] == ["Растения", "Общее время"]
+    assert [row[0].text for row in markup.inline_keyboard] == [
+        "Растения",
+        "График полива",
+        "Общее время",
+    ]
+
+
+async def test_watering_plan_shows_only_active_schedules_in_local_time() -> None:
+    """A short plan groups locations and excludes unscheduled or inactive plants."""
+    bot = GardenBot(
+        BotSettings("test-only-token", frozenset(), "postgresql://test-only", "Europe/Berlin")
+    )
+    location_id = str(uuid4())
+    first_id, second_id, unused_id, dead_id = (str(uuid4()) for _ in range(4))
+    plants = [
+        {"id": first_id, "name": "Crassula", "location_id": location_id},
+        {"id": second_id, "name": "Monstera"},
+        {"id": unused_id, "name": "No plan", "location_id": location_id},
+        {"id": dead_id, "name": "Retired", "status": "dead"},
+    ]
+    schedules = [
+        {
+            "plant_id": plant_id,
+            "anchor_date": "2026-10-01",
+            "cadence_days": cadence,
+            "next_due_at": "2026-10-04T16:00:00+00:00",
+        }
+        for plant_id, cadence in ((first_id, 3), (second_id, 5), (dead_id, 7))
+    ]
+    bot.garden.list_entities = AsyncMock(  # type: ignore[method-assign]
+        side_effect=lambda kind: (
+            plants if kind == "plant" else [{"id": location_id, "name": "Shelf"}]
+        )
+    )
+    bot.watering.list_schedules = AsyncMock(return_value=schedules)  # type: ignore[method-assign]
+    update: Any = Mock(callback_query=None)
+    update.effective_message.reply_text = AsyncMock()
+    context: Any = Mock(user_data={"edit": "time"})
+    await bot.handle_watering_plan(update, context)
+    text = update.effective_message.reply_text.call_args.args[0]
+    assert context.user_data == {}
+    assert "Shelf" in text and "Без места" in text
+    assert "Crassula" in text and "Monstera" in text
+    assert "No plan" not in text and "Retired" not in text
+    assert "каждые 3 дн. с 01.10.2026" in text
+    assert text.count("04.10.2026 18:00") == 2
+
+    bot.watering.list_schedules.return_value = []
+    await bot.handle_watering_plan(update, context)
+    assert update.effective_message.reply_text.call_args.args[0] == (
+        "Нет растений с включённым графиком полива."
+    )
+
+
+async def test_watering_plan_pages_large_location_and_unassigned_group() -> None:
+    """Long plans show location buttons and at most ten entries per message."""
+    bot = GardenBot(BotSettings("test-only-token", frozenset(), "postgresql://test-only"))
+    location_id = str(uuid4())
+    plants = [
+        {"id": str(uuid4()), "name": f"Crassula {index:02}", "location_id": location_id}
+        for index in range(12)
+    ]
+    plants.append({"id": str(uuid4()), "name": "Unassigned"})
+    plants.append({"id": str(uuid4()), "name": "No plan"})
+    schedules = [
+        {
+            "plant_id": plant["id"],
+            "anchor_date": "2026-10-01",
+            "cadence_days": 3,
+            "next_due_at": "2026-10-04T09:00:00+00:00",
+        }
+        for plant in plants[:-1]
+    ]
+    bot.garden.list_entities = AsyncMock(  # type: ignore[method-assign]
+        side_effect=lambda kind: (
+            plants if kind == "plant" else [{"id": location_id, "name": "Balcony"}]
+        )
+    )
+    bot.watering.list_schedules = AsyncMock(return_value=schedules)  # type: ignore[method-assign]
+    update: Any = Mock(callback_query=None)
+    update.effective_message.reply_text = AsyncMock()
+    context: Any = Mock(user_data={})
+    await bot.handle_watering_plan(update, context)
+    markup = update.effective_message.reply_text.call_args.kwargs["reply_markup"]
+    assert [row[0].text for row in markup.inline_keyboard] == ["Balcony (12)", "Без места (1)"]
+
+    update.callback_query = Mock()
+    update.callback_query.answer = AsyncMock()
+    update.callback_query.edit_message_text = AsyncMock()
+    update.callback_query.data = f"wpl:{location_id}:0"
+    await bot.handle_callback(update, context)
+    first = update.callback_query.edit_message_text.call_args
+    assert "Crassula 00" in first.kwargs["text"]
+    assert "Crassula 09" in first.kwargs["text"]
+    assert "Crassula 10" not in first.kwargs["text"]
+    assert first.kwargs["text"].count("Следующее:") == 10
+    assert first.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == (
+        f"wpl:{location_id}:1"
+    )
+
+    update.callback_query.data = f"wpl:{location_id}:1"
+    await bot.handle_callback(update, context)
+    second = update.callback_query.edit_message_text.call_args
+    assert "Crassula 10" in second.kwargs["text"]
+    assert "Crassula 11" in second.kwargs["text"]
+    assert second.kwargs["text"].count("Следующее:") == 2
+    assert second.kwargs["reply_markup"].inline_keyboard[-1][0].callback_data == "wp"
+
+    update.callback_query.data = "wpl:none:0"
+    await bot.handle_callback(update, context)
+    assert "Unassigned" in update.callback_query.edit_message_text.call_args.kwargs["text"]
+    assert "No plan" not in update.callback_query.edit_message_text.call_args.kwargs["text"]

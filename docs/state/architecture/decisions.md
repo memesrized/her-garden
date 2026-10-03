@@ -51,6 +51,17 @@ so back navigation survives plant-card edits, while each screen reads current pr
   already organize the collection. Adding a new data concept just for navigation would enlarge
   the MCP and editing surface before its meaning is agreed.
 
+**Decision: Keep the watering-plan overview separate from the plant editor**
+The `/watering_plan` command joins enabled schedules to active plant projections. Up to ten plans
+appear together by location; longer lists show location buttons and ten plans per page. The view
+reads current schedules on every callback, so disabled or moved plants do not remain in a stale
+list. `/plants` keeps its existing 12-plant editor pagination.
+
+- **Alternative**: Put every scheduled plant in one message
+- **Description**: Render all enabled schedules whenever the command is called.
+- **Rejection reason**: The message would become hard to scan and could exceed Telegram's text
+  limit as the collection grows.
+
 **Decision: PostgreSQL events plus transactional projections**
 One schema and one write transaction keep durable history and current state consistent.
 Replaying one entity's events is sufficient for a household and makes corrections predictable.
