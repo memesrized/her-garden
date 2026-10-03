@@ -37,6 +37,8 @@ At startup the bot publishes its private-chat command list and native Telegram m
 menu setup retries on a later poll if Telegram is temporarily unavailable. `/plants` reads
 existing locations and displays at most 12 active plants per page. This navigation does not
 require a new database migration or additional bot credentials.
+`/watering_plan` reads only enabled schedules for active plants. It shows at most ten schedules
+at once, with location buttons for longer lists; all dates use `WATERING_TIMEZONE`.
 
 Later image deployments update the bot only while both bot settings are present. Removing those
 settings and deploying again stops the bot. A bot started manually without the profile is not

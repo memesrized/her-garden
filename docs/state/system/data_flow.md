@@ -36,7 +36,9 @@ day-postponed reminders for their existing dates, but preserves exact-time hour 
 optional `bot.py` process checks private-chat usernames,
 handles plant selection and buttons, and polls pending notifications.
 Its plant picker reads the same projected plants and locations, groups them by place, and shows
-12 plants per page. Telegram's native command menu exposes the controls without memorized commands.
+12 plants per page. Its watering-plan view joins enabled schedules to active plant projections,
+shows a short location-grouped list directly, and pages longer lists by place in groups of ten.
+Telegram's native command menu exposes the controls without memorized commands.
 Both processes use the same database; MCP never requires bot credentials.
 `store.py` uses a five-connection async pool. One transaction checks retry identity, validates
 references, inserts an event, replays that entity and updates its projection. A single

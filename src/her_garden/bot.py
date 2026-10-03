@@ -52,6 +52,7 @@ REMINDER_ACTIONS: dict[str, tuple[Literal[1, 2, 4], Adjustment, Literal["day", "
 }
 BotApplication = Application[Any, Any, Any, Any, Any, Any]
 PLANTS_PER_PAGE = 12
+SCHEDULES_PER_PAGE = 10
 
 
 @dataclass(frozen=True)
@@ -100,6 +101,7 @@ class GardenBot:
         app.add_handler(TypeHandler(Update, self.handle_access), group=-1)
         app.add_handler(CommandHandler("start", self.handle_start))
         app.add_handler(CommandHandler("plants", self.handle_plants))
+        app.add_handler(CommandHandler("watering_plan", self.handle_watering_plan))
         app.add_handler(CommandHandler("time", self.handle_time))
         app.add_handler(CommandHandler("help", self.handle_help))
         app.add_handler(CommandHandler("cancel", self.handle_cancel))
@@ -140,7 +142,7 @@ class GardenBot:
         await self._reply(
             update,
             "Напоминания о поливе включены для этого чата. "
-            "Откройте растения или общее время кнопкой ниже. "
+            "Откройте растения, график полива или общее время кнопкой ниже. "
             "Изменения расписания доступны также через MCP.",
             self._menu_keyboard(),
         )
@@ -150,11 +152,19 @@ class GardenBot:
         self._user_data(context).clear()
         await self._show_locations(update)
 
+    async def handle_watering_plan(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Show enabled watering plans, grouped by location when the list is long."""
+        self._user_data(context).clear()
+        await self._show_watering_plan(update)
+
     async def handle_help(self, update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
         """Explain the bot's controls without requiring command recall."""
         await self._reply(
             update,
             "Растения: выберите место, затем растение и измените его график. "
+            "График полива: посмотрите ближайшие напоминания и интервалы. "
             "Общее время: задайте час плановых напоминаний. "
             "Кнопки под напоминанием переносят все растения в нём. "
             "Отменить незаконченный ввод можно командой /cancel.",
@@ -215,6 +225,103 @@ class GardenBot:
             InlineKeyboardMarkup(rows),
         )
 
+    async def _show_watering_plan(self, update: Update) -> None:
+        entries = await self._scheduled_plants()
+        if not entries:
+            await self._show_menu(
+                update, "Нет растений с включённым графиком полива.", self._menu_keyboard()
+            )
+            return
+        locations = await self.garden.list_entities("location")
+        groups = self._location_counts([plant for plant, _ in entries], locations)
+        if len(entries) > SCHEDULES_PER_PAGE:
+            rows = [
+                [InlineKeyboardButton(f"{name[:50]} ({count})", callback_data=f"wpl:{key}:0")]
+                for key, name, count in groups
+            ]
+            await self._show_menu(
+                update,
+                f"График полива · {len(entries)} растений. Выберите место:",
+                InlineKeyboardMarkup(rows),
+            )
+            return
+        names = {str(location["id"]): str(location["name"]) for location in locations}
+        lines = ["График полива:"]
+        for key, name, _ in groups:
+            lines.append(f"\n{name}")
+            lines.extend(
+                self._schedule_line(plant, schedule)
+                for plant, schedule in entries
+                if self._location_key(plant, names) == key
+            )
+        await self._show_menu(update, "\n".join(lines), self._menu_keyboard())
+
+    async def _show_watering_location(self, update: Update, location_key: str, page: int) -> None:
+        if page < 0:
+            raise ValueError("Страница недоступна")
+        locations = await self.garden.list_entities("location")
+        names = {str(location["id"]): str(location["name"]) for location in locations}
+        if location_key != "none" and location_key not in names:
+            raise ValueError("Место больше недоступно. Откройте /watering_plan снова")
+        entries = await self._scheduled_plants()
+        selected = [item for item in entries if self._location_key(item[0], names) == location_key]
+        back = InlineKeyboardButton("← К местам", callback_data="wp")
+        if not selected:
+            await self._show_menu(
+                update,
+                "В этом месте больше нет растений с графиком полива.",
+                InlineKeyboardMarkup([[back]]),
+            )
+            return
+        total_pages = (len(selected) + SCHEDULES_PER_PAGE - 1) // SCHEDULES_PER_PAGE
+        page = min(page, total_pages - 1)
+        name = names.get(location_key, "Без места")
+        lines = [f"График полива · {name} · {page + 1}/{total_pages}:"]
+        lines.extend(
+            self._schedule_line(plant, schedule)
+            for plant, schedule in selected[
+                page * SCHEDULES_PER_PAGE : (page + 1) * SCHEDULES_PER_PAGE
+            ]
+        )
+        navigation = []
+        if page:
+            navigation.append(
+                InlineKeyboardButton("← Назад", callback_data=f"wpl:{location_key}:{page - 1}")
+            )
+        if page + 1 < total_pages:
+            navigation.append(
+                InlineKeyboardButton("Далее →", callback_data=f"wpl:{location_key}:{page + 1}")
+            )
+        rows = [navigation] if navigation else []
+        rows.append([back])
+        await self._show_menu(update, "\n".join(lines), InlineKeyboardMarkup(rows))
+
+    async def _scheduled_plants(self) -> list[tuple[Record, Record]]:
+        """Join enabled plans to active plants in next-reminder order."""
+        plants = {str(plant["id"]): plant for plant in await self._active_plants()}
+        schedules = await self.watering.list_schedules()
+        entries = [
+            (plants[str(schedule["plant_id"])], schedule)
+            for schedule in schedules
+            if str(schedule["plant_id"]) in plants
+        ]
+        return sorted(
+            entries,
+            key=lambda item: (item[1]["next_due_at"], str(item[0]["name"]).casefold()),
+        )
+
+    def _schedule_line(self, plant: Record, schedule: Record) -> str:
+        """Format one plan using the bot's configured local timezone."""
+        name = str(plant["name"]).replace("\n", " ").replace("\r", " ")[:120]
+        anchor = date.fromisoformat(str(schedule["anchor_date"]))
+        due = datetime.fromisoformat(str(schedule["next_due_at"])).astimezone(
+            ZoneInfo(self.settings.timezone_name)
+        )
+        return (
+            f"• {name} — каждые {schedule['cadence_days']} дн. с {anchor:%d.%m.%Y}\n"
+            f"  Следующее: {due:%d.%m.%Y %H:%M}"
+        )
+
     async def _active_plants(self) -> list[Record]:
         plants = await self.garden.list_entities("plant")
         return [plant for plant in plants if plant.get("status") not in {"dead", "given_away"}]
@@ -256,6 +363,13 @@ class GardenBot:
         try:
             if data.startswith("w:"):
                 await self._handle_reminder(update, data)
+            elif data == "wp":
+                self._user_data(context).clear()
+                await self._show_watering_plan(update)
+            elif data.startswith("wpl:"):
+                self._user_data(context).clear()
+                location_key, raw_page = data[4:].rsplit(":", 1)
+                await self._show_watering_location(update, location_key, int(raw_page))
             elif data == "g":
                 self._user_data(context).clear()
                 await self._show_locations(update)
@@ -441,6 +555,7 @@ class GardenBot:
         """Publish private-chat command hints and Telegram's native menu button."""
         commands = [
             BotCommand("plants", "Выбрать растение и настроить полив"),
+            BotCommand("watering_plan", "Посмотреть график полива"),
             BotCommand("time", "Изменить общее время напоминаний"),
             BotCommand("help", "Показать возможности бота"),
             BotCommand("cancel", "Отменить ввод"),
@@ -540,6 +655,7 @@ class GardenBot:
         return InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton("Растения", callback_data="g")],
+                [InlineKeyboardButton("График полива", callback_data="wp")],
                 [InlineKeyboardButton("Общее время", callback_data="t")],
             ]
         )

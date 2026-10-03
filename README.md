@@ -123,14 +123,19 @@ The optional bot runs as a separate Compose service. Its private environment nee
 and a comma-separated `TG_USERNAMES` allowlist. Start it with
 `docker compose --profile telegram up -d bot`; without that profile or those credentials, MCP
 continues to run independently. Each allowed user must first start a private chat with the bot,
-then can use `/plants` to choose a plant and change its cadence or start date, and `/time` to
-change the shared reminder hour.
+then can use `/plants` to choose a plant and change its cadence or start date,
+`/watering_plan` to review current schedules, and `/time` to change the shared reminder hour.
 
-The Telegram command menu lists the bot's controls, and `/start` includes buttons for plants
-and the shared time. `/plants` first groups active plants by their existing locations, with an
-extra group for plants without a location. Each location has pages of at most 12 plants and a
-back button from each plant card. Locations are existing plant data; separate tags are not
-currently stored.
+The Telegram command menu lists the bot's controls, and `/start` includes buttons for plants,
+the watering plan, and the shared time. `/plants` first groups active plants by their existing
+locations, with an extra group for plants without a location. Each location has pages of at most
+12 plants and a back button from each plant card. Locations are existing plant data; separate
+tags are not currently stored.
+
+`/watering_plan` shows only active plants with enabled schedules, including each cadence, start
+date, and next reminder in the configured local timezone. Up to ten plans appear in one message
+grouped by location. Longer lists open a location picker, with at most ten plans per page inside
+each location and a separate group for plants without a location.
 
 Plants due together appear in one reminder per enrolled private chat. Each reminder offers seven
 buttons: postpone every listed plant by 1, 2 or 4 hours; postpone their next reminders by 1 or

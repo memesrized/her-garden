@@ -67,6 +67,17 @@
     - Mention any known issues or limitations of the current implementation, so that they can be addressed in the future and so that LLMs can be aware of them when working with the code or state files.
     - Mention any future plans or next steps for the project, so that LLMs can understand the direction of the project and can contribute to it more effectively.
 
+## ChatGPT MCP connection after tool changes
+
+- After deploying an added MCP tool or a changed tool schema, explicitly remind the owner that
+  ChatGPT on the web may still show its previously discovered tools. Open the Her Garden connection
+  in ChatGPT Plugins and refresh it; if the new tool is still missing, reconnect or recreate the
+  connection, then start a new chat to verify the tool list.
+- Reconnection uses OAuth with dynamic client registration: leave client ID and client secret
+  empty. The consent page asks for the household password stored privately in
+  `household-access.txt` in the server's Her Garden deployment directory. Never copy that password
+  into the repository, chat messages, or logs. The Telegram bot token is unrelated.
+
 ## Human based verification
 
 ### Pre-task spec (for non-trivial features)
